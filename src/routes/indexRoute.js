@@ -7,7 +7,7 @@ import courseRoutes from "./courseRoutes.js";
 const router = Router();
 
 router.use("/auth" ,authRoute);
-router.use("/search-user" ,userRoutes);
+router.use("/user" ,userRoutes);
 router.use("/course" ,courseRoutes);
 
 export default router;

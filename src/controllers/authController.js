@@ -63,7 +63,7 @@ export const login = asyncHandler(async (req, res) => {
   if (!user) return res.status(404).json({ message: 'User not found' });
 
   const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) return res.status(401).json({ message: 'Invalid credentials' });
+  if (!isMatch) return res.status(401).json({ message: 'Incorrect password' });
 
   const token = generateJWT({ id: user._id, role: user.role });
   res.json({ token, user: { id: user._id, fullName: user.fullName, role: user.role } });
