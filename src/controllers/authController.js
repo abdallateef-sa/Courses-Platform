@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/userModel.js";
 import generateJWT from "../utils/generateJWT.js";
 import sendMail from "../utils/sendMail.js";
+import { rateLimitMap } from '../middlewares/loginLimiter.js';
 
 // @desc Register new student or admin
 export const register = asyncHandler(async (req, res) => {
@@ -78,6 +79,8 @@ export const login = asyncHandler(async (req, res) => {
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
+
+  rateLimitMap.delete(emailOrPhone);
 
   const token = generateJWT({ id: user._id, role: user.role });
   res.json({

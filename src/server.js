@@ -1,6 +1,7 @@
 import express from "express";
 import dotenv from "dotenv";
 import morgan from "morgan";
+import cors from "cors";
 import ApiError from "./utils/ApiError.js";
 import globalError from "./middlewares/errorMiddleware.js";
 import dbConnection from "./config/database.js";
@@ -12,8 +13,8 @@ dotenv.config();
 dbConnection();
 
 const app = express();
-app.use(express.json());
-
+app.use(express.json({limit : '20kb'}));
+app.use(cors());
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
