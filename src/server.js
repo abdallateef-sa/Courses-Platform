@@ -6,6 +6,20 @@ import ApiError from "./utils/ApiError.js";
 import globalError from "./middlewares/errorMiddleware.js";
 import dbConnection from "./config/database.js";
 import indexRoute from "./routes/indexRoute.js";
+import fs from 'fs';
+import path from 'path';
+
+// Create folders if not exist
+const imagePath = path.join('src', 'uploads', 'images');
+const pdfPath = path.join('src', 'uploads', 'pdfs');
+
+[imagePath, pdfPath].forEach(folder => {
+  if (!fs.existsSync(folder)) {
+    fs.mkdirSync(folder, { recursive: true });
+    console.log(`Created folder: ${folder}`);
+  }
+});
+
 
 dotenv.config();
 
