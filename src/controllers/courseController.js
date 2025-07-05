@@ -76,8 +76,12 @@ export const getCourse = asyncHandler(async (req, res) => {
   const course = await Course.findOne({ name: courseName });
   if (!course) return res.status(404).json({ message: "Course not found" });
 
+  const isAdmin = req.user.role === 'admin';
   const isOpen = course.lockedFor.includes(req.user._id);
-  if (!isOpen) return res.status(403).json({ message: "Course is locked" });
+
+  if (!isAdmin && !isOpen) {
+    return res.status(403).json({ message: "Course is locked" });
+  }
 
   res.status(200).json(course);
 });
