@@ -39,7 +39,7 @@ if (process.env.NODE_ENV === "development") {
 app.use("/api/v1",indexRoute);
 
 app.use((req, res, next) => {
-  next(new ApiError(`Can't find this route: ${req.originalUrl}`, 400));
+  next(new ApiError(`Can't find this route: ${req.originalUrl}`, 404));
 });
 
 // Global error handling middleware for express

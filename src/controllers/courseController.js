@@ -61,7 +61,7 @@ export const addSection = asyncHandler(async (req, res) => {
 
 // @desc List all courses (public info)
 export const listCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find().select("name teacher");
+  const courses = await Course.find().select("name teacher image");
   res.json(courses);
 });
 
@@ -119,7 +119,7 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({ lockedFor: req.user._id }).select(
-    "name teacher"
+    "name teacher image"
   );
   res.json(courses);
 });

@@ -5,6 +5,7 @@ import { searchUser , deleteUser , getAllStudents} from '../controllers/userCont
 
 const router = express.Router();
 
+// by admin
 router.get('/search', isAuth, isAdmin, searchUser);
 router.delete('/delete', isAuth, isAdmin, deleteUser);
 router.get('/students', isAuth, isAdmin, getAllStudents);
