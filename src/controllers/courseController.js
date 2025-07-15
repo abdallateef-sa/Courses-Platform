@@ -31,13 +31,18 @@ export const createCourse = asyncHandler(async (req, res) => {
   res.status(201).json(course);
 });
 
+
 // @desc add new Section in Course
 export const addSection = asyncHandler(async (req, res) => {
   const { courseName, title, videos } = req.body;
-  if (!courseName || !title) return res.status(400).json({ message: 'courseName and title are required' });
+  if (!courseName || !title) {
+    return res.status(400).json({ message: 'courseName and title are required' });
+  }
 
   const course = await Course.findOne({ name: courseName });
-  if (!course) return res.status(404).json({ message: 'Course not found' });
+  if (!course) {
+    return res.status(404).json({ message: 'Course not found' });
+  }
 
   const newSection = {
     title,
@@ -45,23 +50,76 @@ export const addSection = asyncHandler(async (req, res) => {
     pdfs: []
   };
 
+  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/`; //  http://localhost:5000/uploads/
+
   if (req.files) {
     req.files.forEach(file => {
       newSection.pdfs.push({
         label: file.originalname,
-        filename: file.filename
+        filename: file.filename,
+        url: fileBaseUrl + file.filename
       });
     });
   }
 
   course.sections.push(newSection);
   await course.save();
-  res.json({ message: 'Section added', course });
+
+  const courseImageUrl = course.image ? fileBaseUrl + course.image : null;
+
+  res.json({
+  message: 'Section added',
+  course: {
+    ...course.toObject(),
+    imageUrl: fileBaseUrl + course.image,
+    sections: course.sections.map(section => ({
+      _id: section._id,
+      title: section.title,
+      videos: section.videos,
+      pdfs: section.pdfs.map(pdf => ({
+        _id: pdf._id,
+        label: pdf.label,
+        filename: pdf.filename,
+        url: fileBaseUrl + pdf.filename
+      }))
+    }))
+  }
 });
+
+});
+
+// @desc add new Section in Course
+
+// export const addSection = asyncHandler(async (req, res) => {
+//   const { courseName, title, videos } = req.body;
+//   if (!courseName || !title) return res.status(400).json({ message: 'courseName and title are required' });
+
+//   const course = await Course.findOne({ name: courseName });
+//   if (!course) return res.status(404).json({ message: 'Course not found' });
+
+//   const newSection = {
+//     title,
+//     videos: videos ? JSON.parse(videos) : [],
+//     pdfs: []
+//   };
+
+//   if (req.files) {
+//     req.files.forEach(file => {
+//       newSection.pdfs.push({
+//         label: file.originalname,
+//         filename: file.filename
+//       });
+//     });
+//   }
+
+//   course.sections.push(newSection);
+//   await course.save();
+//   res.json({ message: 'Section added', course });
+// });
 
 // @desc List all courses (public info)
 export const listCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find().select("name teacher image");
+  const courses = await Course.find().select();
   res.json(courses);
 });
 
@@ -118,9 +176,7 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
 
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find({ lockedFor: req.user._id }).select(
-    "name teacher image"
-  );
+  const courses = await Course.find({ lockedFor: req.user._id }).select();
   res.json(courses);
 });
 
