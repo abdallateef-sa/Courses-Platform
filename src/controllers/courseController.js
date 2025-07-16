@@ -36,29 +36,30 @@ export const createCourse = asyncHandler(async (req, res) => {
 // @desc add new Section in Course
 export const addSection = asyncHandler(async (req, res) => {
   const { courseName, title, videos } = req.body;
+
   if (!courseName || !title) {
-    return res.status(400).json({ message: 'courseName and title are required' });
+    return res.status(400).json({ message: "courseName and title are required" });
   }
 
   const course = await Course.findOne({ name: courseName });
-  if (!course) {
-    return res.status(404).json({ message: 'Course not found' });
-  }
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  const videoList = videos ? JSON.parse(videos) : [];
 
   const newSection = {
     title,
-    videos: videos ? JSON.parse(videos) : [],
-    pdfs: []
+    videos: videoList,
+    pdfs: [],
   };
 
-  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/images/`; //  http://localhost:5000/uploads/images
+  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
 
   if (req.files) {
-    req.files.forEach(file => {
+    req.files.forEach((file) => {
       newSection.pdfs.push({
         label: file.originalname,
         filename: file.filename,
-        url: fileBaseUrl + file.filename
+        url: pdfBaseUrl + file.filename,
       });
     });
   }
@@ -66,35 +67,34 @@ export const addSection = asyncHandler(async (req, res) => {
   course.sections.push(newSection);
   await course.save();
 
-  const courseImageUrl = course.image ? fileBaseUrl + course.image : null;
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
 
   res.json({
-  message: 'Section added',
-  course: {
-    ...course.toObject(),
-    imageUrl: fileBaseUrl + course.image,
-    sections: course.sections.map(section => ({
-      _id: section._id,
-      title: section.title,
-      videos: section.videos,
-      pdfs: section.pdfs.map(pdf => ({
-        _id: pdf._id,
-        label: pdf.label,
-        filename: pdf.filename,
-        url: fileBaseUrl + pdf.filename
-      }))
-    }))
-  }
+    message: "Section added",
+    course: {
+      ...course.toObject(),
+      imageUrl: course.image ? imageBaseUrl + course.image : null,
+      sections: course.sections.map((section) => ({
+        _id: section._id,
+        title: section.title,
+        videos: section.videos,
+        pdfs: section.pdfs.map((pdf) => ({
+          _id: pdf._id,
+          label: pdf.label,
+          filename: pdf.filename,
+          url: pdfBaseUrl + pdf.filename,
+        })),
+      })),
+    },
+  });
 });
 
-});
 
 // @desc List all courses (public info)
-
 export const listCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find();
 
-  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/images/`;
+  const fileBaseUrl = `${req.protocol}://${req.get('host')}/api/v1/uploads/images/`;
 
   const formattedCourses = courses.map(course => ({
     _id: course._id,
@@ -129,8 +129,30 @@ export const getCourse = asyncHandler(async (req, res) => {
     return res.status(403).json({ message: "Course is locked" });
   }
 
-  res.status(200).json(course);
+  // Base URLs
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+
+  // Format course
+  const formattedCourse = {
+    ...course.toObject(),
+    imageUrl: course.image ? imageBaseUrl + course.image : null,
+    sections: course.sections.map(section => ({
+      _id: section._id,
+      title: section.title,
+      videos: section.videos,
+      pdfs: section.pdfs.map(pdf => ({
+        _id: pdf._id,
+        label: pdf.label,
+        filename: pdf.filename,
+        url: pdfBaseUrl + pdf.filename
+      }))
+    }))
+  };
+
+  res.status(200).json(formattedCourse);
 });
+
 
 // @desc Get course by adminID
 export const searchCoursesByAdmin = asyncHandler(async (req, res) => {
