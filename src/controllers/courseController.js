@@ -50,7 +50,7 @@ export const addSection = asyncHandler(async (req, res) => {
     pdfs: []
   };
 
-  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/`; //  http://localhost:5000/uploads/
+  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/images/`; //  http://localhost:5000/uploads/images
 
   if (req.files) {
     req.files.forEach(file => {
@@ -122,7 +122,7 @@ export const addSection = asyncHandler(async (req, res) => {
 export const listCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find();
 
-  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/images/`;
 
   const formattedCourses = courses.map(course => ({
     _id: course._id,
