@@ -89,35 +89,6 @@ export const addSection = asyncHandler(async (req, res) => {
 
 });
 
-// @desc add new Section in Course
-
-// export const addSection = asyncHandler(async (req, res) => {
-//   const { courseName, title, videos } = req.body;
-//   if (!courseName || !title) return res.status(400).json({ message: 'courseName and title are required' });
-
-//   const course = await Course.findOne({ name: courseName });
-//   if (!course) return res.status(404).json({ message: 'Course not found' });
-
-//   const newSection = {
-//     title,
-//     videos: videos ? JSON.parse(videos) : [],
-//     pdfs: []
-//   };
-
-//   if (req.files) {
-//     req.files.forEach(file => {
-//       newSection.pdfs.push({
-//         label: file.originalname,
-//         filename: file.filename
-//       });
-//     });
-//   }
-
-//   course.sections.push(newSection);
-//   await course.save();
-//   res.json({ message: 'Section added', course });
-// });
-
 // @desc List all courses (public info)
 
 export const listCourses = asyncHandler(async (req, res) => {
@@ -139,11 +110,6 @@ export const listCourses = asyncHandler(async (req, res) => {
   res.json(formattedCourses);
 });
 
-
-// export const listCourses = asyncHandler(async (req, res) => {
-//   const courses = await Course.find().select();
-//   res.json(courses);
-// });
 
 // @desc Get course detail for student
 export const getCourse = asyncHandler(async (req, res) => {
@@ -201,25 +167,6 @@ export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({ lockedFor: req.user._id }).select();
   res.json(courses);
 });
-
-// @desc Add comment (admin only)
-// export const addComment = asyncHandler(async (req, res) => {
-//   const { courseName, message } = req.body;
-
-//   if (!courseName || !message) {
-//     return res
-//       .status(400)
-//       .json({ message: "courseName and message are required" });
-//   }
-
-//   const course = await Course.findOne({ name: courseName });
-//   if (!course) return res.status(404).json({ message: "Course not found" });
-
-//   course.comments.push({ message });
-//   await course.save();
-
-//   res.status(200).json({ message: "Comment added", comments: course.comments });
-// });
 
 // @desc Add comment and send notification
 export const addComment = asyncHandler(async (req, res) => {
