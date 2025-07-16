@@ -118,10 +118,31 @@ export const addSection = asyncHandler(async (req, res) => {
 // });
 
 // @desc List all courses (public info)
+
 export const listCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find().select();
-  res.json(courses);
+  const courses = await Course.find();
+
+  const fileBaseUrl = `${req.protocol}://${req.get('host')}/uploads/`;
+
+  const formattedCourses = courses.map(course => ({
+    _id: course._id,
+    name: course.name,
+    teacher: course.teacher,
+    price: course.price,
+    image: course.image,
+    imageUrl: course.image ? fileBaseUrl + course.image : null,
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt
+  }));
+
+  res.json(formattedCourses);
 });
+
+
+// export const listCourses = asyncHandler(async (req, res) => {
+//   const courses = await Course.find().select();
+//   res.json(courses);
+// });
 
 // @desc Get course detail for student
 export const getCourse = asyncHandler(async (req, res) => {
