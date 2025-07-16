@@ -9,6 +9,7 @@ import indexRoute from "./routes/indexRoute.js";
 import fs from 'fs';
 import path from 'path';
 
+
 // Create folders if not exist
 const imagePath = path.join('src', 'uploads', 'images');
 const pdfPath = path.join('src', 'uploads', 'pdfs');
@@ -29,6 +30,7 @@ dbConnection();
 const app = express();
 app.use(express.json({limit : '20kb'}));
 app.use(cors());
+
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
