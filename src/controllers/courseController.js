@@ -248,3 +248,41 @@ export const getMyNotifications = asyncHandler(async (req, res) => {
 
   res.json(notifications);
 });
+
+
+// @desc Get students enrolled (unlocked) in a course
+export const getStudentsInCourse = asyncHandler(async (req, res) => {
+  const { courseName } = req.body;
+
+  if (!courseName) {
+    return res.status(400).json({ message: "Course name is required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  const students = await User.find({
+    _id: { $in: course.lockedFor },
+    role: 'student'
+  }).select("-password -__v");
+
+  if (!students.length) {
+    return res.status(404).json({ message: "No students found for this course" });
+  }
+
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+
+  const formattedStudents = students.map(student => ({
+    _id: student._id,
+    name: student.name,
+    email: student.email,
+    phone: student.phone,
+    role: student.role,
+    cardImage: student.cardImage || null,
+    imageUrl: student.cardImage ? imageBaseUrl + student.cardImage : null
+  }));
+
+  res.status(200).json({ count: formattedStudents.length, students: formattedStudents });
+});
