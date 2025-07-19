@@ -5,7 +5,7 @@ import bcrypt from "bcryptjs";
 import User from "../models/userModel.js";
 import generateJWT from "../utils/generateJWT.js";
 import sendMail from "../utils/sendMail.js";
-import { rateLimitMap } from '../middlewares/loginLimiter.js';
+import { rateLimitMap } from "../middlewares/loginLimiter.js";
 
 // @desc Register new student or admin
 export const register = asyncHandler(async (req, res) => {
@@ -21,6 +21,7 @@ export const register = asyncHandler(async (req, res) => {
   } = req.body;
 
   const userRole = role || "student";
+  const normalizedEmail = email.toLowerCase(); //  lowercase
 
   if (userRole === "student" && !req.file) {
     return res
@@ -28,7 +29,9 @@ export const register = asyncHandler(async (req, res) => {
       .json({ message: "Card image is required for students" });
   }
 
-  const exists = await User.findOne({ $or: [{ email }, { phone }] });
+  const exists = await User.findOne({
+    $or: [{ email: normalizedEmail }, { phone }],
+  });
   if (exists) {
     if (req.file) {
       const imagePath = path.join("src/uploads/images", req.file.filename);
@@ -51,7 +54,7 @@ export const register = asyncHandler(async (req, res) => {
 
   const newUser = await User.create({
     fullName,
-    email,
+    email: normalizedEmail,
     phone,
     password: hashedPassword,
     year,
@@ -65,16 +68,28 @@ export const register = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     token,
-    user: { id: newUser._id, fullName, email, phone, role: newUser.role },
+    user: {
+      id: newUser._id,
+      fullName,
+      email: normalizedEmail,
+      phone,
+      role: newUser.role,
+    },
   });
 });
 
 // @desc Login student or admin
 export const login = asyncHandler(async (req, res) => {
   const { emailOrPhone, password } = req.body;
+
+  const normalizedInput = emailOrPhone.includes("@")
+    ? emailOrPhone.toLowerCase()
+    : emailOrPhone;
+
   const user = await User.findOne({
-    $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
   });
+
   if (!user) return res.status(404).json({ message: "User not found" });
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -101,8 +116,12 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   if (!emailOrPhone)
     return res.status(400).json({ message: "Please provide email or phone" });
 
+  const normalizedInput = emailOrPhone.includes("@")
+    ? emailOrPhone.toLowerCase()
+    : emailOrPhone;
+
   const user = await User.findOne({
-    $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
   });
 
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -147,8 +166,12 @@ export const verifyResetCode = asyncHandler(async (req, res) => {
       .json({ message: "Email/phone and reset code are required" });
   }
 
+  const normalizedInput = emailOrPhone.includes("@")
+    ? emailOrPhone.toLowerCase()
+    : emailOrPhone;
+
   const user = await User.findOne({
-    $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
     passwordResetExpires: { $gt: Date.now() },
     passwordResetCode: { $exists: true },
   });
