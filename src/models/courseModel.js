@@ -2,7 +2,8 @@ import mongoose from 'mongoose';
 
 const pdfSchema = new mongoose.Schema({
   label: String,
-  filename: String    // اسم الملف بعد الرفع
+  filename: String,
+  downloadable: { type: Boolean, default: false } 
 });
 
 const sectionSchema = new mongoose.Schema({
