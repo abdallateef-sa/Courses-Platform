@@ -141,12 +141,12 @@ export const getCourse = asyncHandler(async (req, res) => {
   const course = await Course.findOne({ name: courseName });
   if (!course) return res.status(404).json({ message: "Course not found" });
 
-  const isAdmin = req.user.role === "admin";
-  const isOpen = course.lockedFor.includes(req.user._id);
+  // const isAdmin = req.user.role === "admin";
+  // const isOpen = course.lockedFor.includes(req.user._id);
 
-  if (!isAdmin && !isOpen) {
-    return res.status(403).json({ message: "Course is locked" });
-  }
+  // if (!isAdmin && !isOpen) {
+  //   return res.status(403).json({ message: "Course is locked" });
+  // }
 
   const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
   const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;

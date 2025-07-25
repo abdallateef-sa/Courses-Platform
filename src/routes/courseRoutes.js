@@ -34,6 +34,6 @@ router.post('/students-in-course', isAuth ,isAdmin , getStudentsInCourse);
 
 // Student
 router.get('/me', isAuth, listUserCourses);
-router.get('/Course', isAuth, getCourse);
+router.get('/Course', getCourse);
 
 export default router;
