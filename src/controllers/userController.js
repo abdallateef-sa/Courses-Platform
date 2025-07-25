@@ -15,8 +15,16 @@ export const searchUser = asyncHandler(async (req, res) => {
 
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  res.status(200).json({ user });
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+
+  const userObj = user.toObject();
+  if (userObj.cardImage)
+    userObj.cardImage = imageBaseUrl + userObj.cardImage;
+
+  res.status(200).json({ user: userObj });
 });
+
+
 
 // @desc delete User by mail or phone
 export const deleteUser = asyncHandler(async (req, res) => {
@@ -50,5 +58,14 @@ export const getAllStudents = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: 'No students found' });
   }
 
-  res.status(200).json({ count: students.length, students });
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+
+  const formattedStudents = students.map((student) => {
+    const studentObj = student.toObject();
+    if (studentObj.cardImage)
+      studentObj.cardImage = imageBaseUrl + studentObj.cardImage;
+    return studentObj;
+  });
+
+  res.status(200).json({ count: formattedStudents.length, students: formattedStudents });
 });
