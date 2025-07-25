@@ -79,31 +79,6 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 // @desc Login student or admin
-// export const login = asyncHandler(async (req, res) => {
-//   const { emailOrPhone, password } = req.body;
-
-//   const normalizedInput = emailOrPhone.includes("@")
-//     ? emailOrPhone.toLowerCase()
-//     : emailOrPhone;
-
-//   const user = await User.findOne({
-//     $or: [{ email: normalizedInput }, { phone: normalizedInput }],
-//   });
-
-//   if (!user) return res.status(404).json({ message: "User not found" });
-
-//   const isMatch = await bcrypt.compare(password, user.password);
-//   if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
-
-//   rateLimitMap.delete(emailOrPhone);
-
-//   const token = generateJWT({ id: user._id, role: user.role });
-//   res.json({
-//     token,
-//     user: { id: user._id, fullName: user.fullName, role: user.role },
-//   });
-// });
-
 export const login = asyncHandler(async (req, res) => {
   const { emailOrPhone, password } = req.body;
 
@@ -122,36 +97,18 @@ export const login = asyncHandler(async (req, res) => {
 
   rateLimitMap.delete(emailOrPhone);
 
-  const newToken = generateJWT({ id: user._id, role: user.role });
-
-  // تحديث التوكن المستخدم حاليًا
-  user.currentToken = newToken;
-  await user.save();
-
+  const token = generateJWT({ id: user._id, role: user.role });
   res.json({
-    token: newToken,
+    token,
     user: { id: user._id, fullName: user.fullName, role: user.role },
   });
 });
 
-
-
 // @desc Logout
-// export const logout = asyncHandler(async (req, res) => {
-//   res.clearCookie("token"); // if using cookies
-//   res.status(200).json({ message: "Logged out successfully" });
-// });
-
 export const logout = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user.id);
-  if (user) {
-    user.currentToken = null;
-    await user.save();
-  }
-
+  res.clearCookie("token"); // if using cookies
   res.status(200).json({ message: "Logged out successfully" });
 });
-
 
 // @desc Forgot Password (Send Reset Code)
 export const forgotPassword = asyncHandler(async (req, res) => {
