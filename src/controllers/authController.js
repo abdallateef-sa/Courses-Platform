@@ -175,14 +175,7 @@ export const verifyResetCode = asyncHandler(async (req, res) => {
     passwordResetExpires: { $gt: Date.now() },
     passwordResetCode: { $exists: true },
   });
-  // Generate deviceToken (session token)
-  const deviceToken =
-    Math.random().toString(36).substring(2) + Date.now().toString(36);
-  user.deviceToken = deviceToken;
-  await user.save();
 
-  // Include deviceToken in JWT
-  const token = generateJWT({ id: user._id, role: user.role, deviceToken });
   if (!user)
     return res.status(400).json({ message: "Invalid or expired reset code" });
 
