@@ -14,6 +14,13 @@ export const isAuth = async (req, res, next) => {
       const user = await User.findById(decoded.id).select("-password");
       if (!user) return res.status(401).json({ message: "User not found" });
 
+      // Check deviceToken
+      if (!decoded.deviceToken || user.deviceToken !== decoded.deviceToken) {
+        return res
+          .status(401)
+          .json({ message: "Session expired or used on another device" });
+      }
+
       req.user = user;
       next();
     } catch (err) {
