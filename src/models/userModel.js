@@ -22,7 +22,6 @@ const userSchema = new mongoose.Schema({
   passwordResetCode: String,
   passwordResetExpires: Date,
   passwordResetVerified: Boolean,
-  currentToken: String,
 }, { timestamps: true });
 
 export default mongoose.model('User', userSchema);
