@@ -6,6 +6,7 @@ import ApiError from "./utils/ApiError.js";
 import globalError from "./middlewares/errorMiddleware.js";
 import dbConnection from "./config/database.js";
 import indexRoute from "./routes/indexRoute.js";
+import { specs, swaggerUi } from "./config/swagger.js";
 import fs from "fs";
 import path from "path";
 
@@ -47,6 +48,26 @@ app.use(
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
   console.log(`mode: ${process.env.NODE_ENV}`);
+}
+
+// Swagger Documentation (Development Only)
+// Only accessible when NODE_ENV=development
+// In production, this route will not be available for security
+if (process.env.NODE_ENV === "development") {
+  app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(specs, {
+      explorer: true,
+      customCss: ".swagger-ui .topbar { display: none }",
+      customSiteTitle: "Courses Platform API Documentation",
+      swaggerOptions: {
+        docExpansion: "none",
+        filter: true,
+        showRequestDuration: true,
+      },
+    })
+  );
 }
 
 //Mount Routes
