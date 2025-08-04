@@ -1,27 +1,31 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
-const userSchema = new mongoose.Schema({
-  fullName: { type: String, required: true },
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true, // lowercase
+const userSchema = new mongoose.Schema(
+  {
+    fullName: { type: String, required: true },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true, // lowercase
+    },
+    phone: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    year: { type: Number, required: true },
+    departmentType: {
+      type: String,
+      enum: ["public", "private"],
+      required: true,
+    },
+    university: { type: String, required: true },
+    cardImage: { type: String },
+    role: { type: String, enum: ["student", "admin"], default: "student" },
+    isLoggedIn: { type: Boolean, default: false }, // للتحكم في جلسة الطالب
+    passwordResetCode: String,
+    passwordResetExpires: Date,
+    passwordResetVerified: Boolean,
   },
-  phone: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  year: { type: Number, required: true },
-  departmentType: {
-    type: String,
-    enum: ['public', 'private'],
-    required: true,
-  },
-  university: { type: String, required: true },
-  cardImage: { type: String },
-  role: { type: String, enum: ['student', 'admin'], default: 'student' },
-  passwordResetCode: String,
-  passwordResetExpires: Date,
-  passwordResetVerified: Boolean,
-}, { timestamps: true });
+  { timestamps: true }
+);
 
-export default mongoose.model('User', userSchema);
+export default mongoose.model("User", userSchema);

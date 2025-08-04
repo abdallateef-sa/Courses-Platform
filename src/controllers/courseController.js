@@ -5,109 +5,24 @@ import Notification from "../models/notificationModel.js";
 import fs from "fs";
 import path from "path";
 
-// @desc Create new course (admin only)
-export const createCourse = asyncHandler(async (req, res) => {
-  const { name, teacher, sections, followGroup, price } = req.body;
-  const createdBy = req.user._id;
+// Helper function to format course data
+const formatCourseData = (course, req) => {
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
 
-  let parsedSections = [];
-  if (sections) {
-    try {
-      parsedSections = JSON.parse(sections);
-    } catch (err) {
-      return res.status(400).json({ message: "Invalid sections format" });
-    }
-  }
-
-  const course = await Course.create({
-    name,
-    teacher,
-    sections: parsedSections,
-    followGroup,
-    price,
-    createdBy,
-    image: req.file?.filename || null,
-  });
-
-  res.status(201).json(course);
-});
-
-// @desc add new Section in Course
-export const addSection = asyncHandler(async (req, res) => {
-  const { courseName, title, videos, pdfsDownloadable } = req.body;
-
-  if (!courseName || !title) {
-    return res.status(400).json({ message: "courseName and title are required" });
-  }
-
-  const course = await Course.findOne({ name: courseName });
-  if (!course) return res.status(404).json({ message: "Course not found" });
-
-  const videoList = videos ? JSON.parse(videos) : [];
-  const pdfDownloadableList = pdfsDownloadable ? JSON.parse(pdfsDownloadable) : [];
-
-  const newSection = {
-    title,
-    videos: videoList,
-    pdfs: [],
-  };
-
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
-
-  if (req.files) {
-    req.files.forEach((file, index) => {
-      const downloadable = pdfDownloadableList[index] === true || pdfDownloadableList[index] === "true";
-      newSection.pdfs.push({
-        label: file.originalname,
-        filename: file.filename,
-        url: pdfBaseUrl + file.filename,
-        downloadable: downloadable || false  // افتراضي false
-      });
-    });
-  }
-
-  course.sections.push(newSection);
-  await course.save();
-
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-
-  res.json({
-    message: "Section added",
-    course: {
-      ...course.toObject(),
-      imageUrl: course.image ? imageBaseUrl + course.image : null,
-      sections: course.sections.map((section) => ({
-        _id: section._id,
-        title: section.title,
-        videos: section.videos.map((video) => ({
-          label: video.label,
-          url: video.url,
-          downloadable: video.downloadable
-        })),
-        pdfs: section.pdfs.map((pdf) => ({
-          _id: pdf._id,
-          label: pdf.label,
-          filename: pdf.filename,
-          url: pdfBaseUrl + pdf.filename,
-          downloadable: pdf.downloadable
-        })),
-      })),
-    },
-  });
-});
-
-// @desc List all courses (public info)
-export const listCourses = asyncHandler(async (req, res) => {
-  const courses = await Course.find();
-
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
-
-  const formattedCourses = courses.map((course) => ({
+  return {
     _id: course._id,
     name: course.name,
     teacher: course.teacher,
     price: course.price,
+    whatsappNumber: course.whatsappNumber,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     createdAt: course.createdAt,
@@ -115,7 +30,12 @@ export const listCourses = asyncHandler(async (req, res) => {
     sections: course.sections.map((section) => ({
       _id: section._id,
       title: section.title,
-      videos: section.videos,
+      videos: section.videos.map((video) => ({
+        _id: video._id,
+        label: video.label,
+        filename: video.filename,
+        url: videoBaseUrl + video.filename,
+      })),
       pdfs: section.pdfs.map((pdf) => ({
         _id: pdf._id,
         label: pdf.label,
@@ -124,11 +44,207 @@ export const listCourses = asyncHandler(async (req, res) => {
         downloadable: pdf.downloadable || false,
       })),
     })),
-  }));
+  };
+};
 
-  res.json(formattedCourses);
+// @desc Create new course (admin only)
+export const createCourse = asyncHandler(async (req, res) => {
+  const { name, teacher, followGroup, price, whatsappNumber } = req.body;
+  const createdBy = req.user._id;
+
+  const course = await Course.create({
+    name,
+    teacher,
+    followGroup,
+    price,
+    whatsappNumber,
+    createdBy,
+    image: req.file?.filename || null,
+  });
+
+  res.status(201).json({
+    message: "Course created successfully",
+    course,
+  });
 });
 
+// @desc Update course (admin only)
+export const updateCourse = asyncHandler(async (req, res) => {
+  const { courseName, newName, teacher, followGroup, price, whatsappNumber } =
+    req.body;
+
+  if (!courseName) {
+    return res.status(400).json({ message: "Course name is required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  // Check authorization
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin"
+  ) {
+    return res.status(403).json({
+      message: "Not authorized to update this course",
+    });
+  }
+
+  // Delete old image if new one is uploaded
+  if (req.file && course.image) {
+    const oldImagePath = path.join("src", "uploads", "images", course.image);
+    fs.unlink(oldImagePath, () => {});
+  }
+
+  // Update course fields
+  if (newName && newName !== courseName) {
+    const existingCourse = await Course.findOne({ name: newName });
+    if (existingCourse) {
+      return res.status(400).json({ message: "Course name already exists" });
+    }
+    course.name = newName;
+  }
+
+  if (teacher) course.teacher = teacher;
+  if (followGroup) course.followGroup = followGroup;
+  if (price !== undefined) course.price = price;
+  if (whatsappNumber) course.whatsappNumber = whatsappNumber;
+  if (req.file) course.image = req.file.filename;
+
+  await course.save();
+
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+
+  res.status(200).json({
+    message: "Course updated successfully",
+    course: {
+      ...course.toObject(),
+      imageUrl: course.image ? imageBaseUrl + course.image : null,
+    },
+  });
+});
+
+// @desc add new Section in Course
+export const addSection = asyncHandler(async (req, res) => {
+  const { courseName, title, videoLabels, pdfLabels, pdfDownloadable } =
+    req.body;
+
+  // Validate required fields
+  if (!courseName || !title) {
+    return res.status(400).json({
+      message: "courseName and title are required",
+    });
+  }
+
+  // Find course
+  const course = await Course.findOne({ name: courseName });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  // Parse JSON arrays safely
+  const videoLabelList = videoLabels ? JSON.parse(videoLabels) : [];
+  const pdfLabelList = pdfLabels ? JSON.parse(pdfLabels) : [];
+  const pdfDownloadableList = pdfDownloadable
+    ? JSON.parse(pdfDownloadable)
+    : [];
+
+  // Create new section
+  const newSection = {
+    title,
+    videos: [],
+    pdfs: [],
+  };
+
+  // Base URLs for file serving
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
+
+  if (req.files) {
+    // Handle video files
+    if (req.files.videos) {
+      req.files.videos.forEach((file, index) => {
+        newSection.videos.push({
+          label: videoLabelList[index] || file.originalname,
+          filename: file.filename,
+        });
+      });
+    }
+
+    // Handle PDF files
+    if (req.files.pdfs) {
+      req.files.pdfs.forEach((file, index) => {
+        const downloadable =
+          index < pdfDownloadableList.length
+            ? pdfDownloadableList[index] === "true"
+            : false;
+
+        newSection.pdfs.push({
+          label: pdfLabelList[index] || file.originalname,
+          filename: file.filename,
+          downloadable,
+        });
+      });
+    }
+  }
+
+  // Add section to course and save
+  course.sections.push(newSection);
+  await course.save();
+
+  // Prepare response
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+
+  const response = {
+    message: "Section added successfully",
+    course: {
+      ...course.toObject(),
+      imageUrl: course.image ? imageBaseUrl + course.image : null,
+      sections: course.sections.map((section) => ({
+        _id: section._id,
+        title: section.title,
+        videos: section.videos.map((video) => ({
+          _id: video._id,
+          label: video.label,
+          filename: video.filename,
+          url: videoBaseUrl + video.filename,
+        })),
+        pdfs: section.pdfs.map((pdf) => ({
+          _id: pdf._id,
+          label: pdf.label,
+          filename: pdf.filename,
+          url: pdfBaseUrl + pdf.filename,
+          downloadable: pdf.downloadable,
+        })),
+      })),
+    },
+  };
+
+  res.status(200).json(response);
+});
+
+// @desc List all courses (public info)
+export const listCourses = asyncHandler(async (req, res) => {
+  const courses = await Course.find();
+  const formattedCourses = courses.map((course) =>
+    formatCourseData(course, req)
+  );
+
+  res.status(200).json({
+    count: courses.length,
+    courses: formattedCourses,
+  });
+});
 
 // @desc Get course detail for student
 export const getCourse = asyncHandler(async (req, res) => {
@@ -139,38 +255,13 @@ export const getCourse = asyncHandler(async (req, res) => {
   }
 
   const course = await Course.findOne({ name: courseName });
-  if (!course) return res.status(404).json({ message: "Course not found" });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
 
-  // const isAdmin = req.user.role === "admin";
-  // const isOpen = course.lockedFor.includes(req.user._id);
-
-  // if (!isAdmin && !isOpen) {
-  //   return res.status(403).json({ message: "Course is locked" });
-  // }
-
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
-
-  const formattedCourse = {
-    ...course.toObject(),
-    imageUrl: course.image ? imageBaseUrl + course.image : null,
-    sections: course.sections.map((section) => ({
-      _id: section._id,
-      title: section.title,
-      videos: section.videos,
-      pdfs: section.pdfs.map((pdf) => ({
-        _id: pdf._id,
-        label: pdf.label,
-        filename: pdf.filename,
-        url: pdfBaseUrl + pdf.filename,
-        downloadable: pdf.downloadable || false,
-      })),
-    })),
-  };
-
+  const formattedCourse = formatCourseData(course, req);
   res.status(200).json(formattedCourse);
 });
-
 
 // @desc Get course by adminID
 export const searchCoursesByAdmin = asyncHandler(async (req, res) => {
@@ -205,36 +296,15 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({ lockedFor: req.user._id });
+  const formattedCourses = courses.map((course) =>
+    formatCourseData(course, req)
+  );
 
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
-
-  const formattedCourses = courses.map((course) => ({
-    _id: course._id,
-    name: course.name,
-    teacher: course.teacher,
-    price: course.price,
-    image: course.image,
-    imageUrl: course.image ? imageBaseUrl + course.image : null,
-    createdAt: course.createdAt,
-    updatedAt: course.updatedAt,
-    sections: course.sections.map((section) => ({
-      _id: section._id,
-      title: section.title,
-      videos: section.videos,
-      pdfs: section.pdfs.map((pdf) => ({
-        _id: pdf._id,
-        label: pdf.label,
-        filename: pdf.filename,
-        url: pdfBaseUrl + pdf.filename,
-        downloadable: pdf.downloadable || false,
-      })),
-    })),
-  }));
-
-  res.json(formattedCourses);
+  res.status(200).json({
+    count: courses.length,
+    courses: formattedCourses,
+  });
 });
-
 
 // @desc Add comment and send notification
 export const addComment = asyncHandler(async (req, res) => {
@@ -273,19 +343,95 @@ export const deleteCourse = asyncHandler(async (req, res) => {
   const course = await Course.findOne({ name: courseName });
   if (!course) return res.status(404).json({ message: "Course not found" });
 
+  // Delete course image
   if (course.image) {
     const imagePath = path.join("src", "uploads", "images", course.image);
-    fs.unlink(imagePath, (err) => {
-      if (err) {
-        console.error(`Error deleting image: ${err.message}`);
-      } else {
-        console.log("Course image deleted");
+    fs.unlink(imagePath, () => {});
+  }
+
+  // Delete all files from all sections
+  course.sections.forEach((section) => {
+    // Delete videos
+    section.videos.forEach((video) => {
+      if (video.filename) {
+        const videoPath = path.join("src", "uploads", "videos", video.filename);
+        fs.unlink(videoPath, () => {});
       }
     });
-  }
+
+    // Delete PDFs
+    section.pdfs.forEach((pdf) => {
+      if (pdf.filename) {
+        const pdfPath = path.join("src", "uploads", "pdfs", pdf.filename);
+        fs.unlink(pdfPath, () => {});
+      }
+    });
+  });
 
   await course.deleteOne();
   res.status(200).json({ message: "Course deleted successfully" });
+});
+
+// @desc Delete section from course (admin only)
+export const deleteSection = asyncHandler(async (req, res) => {
+  const { courseName, sectionId } = req.body;
+
+  if (!courseName || !sectionId) {
+    return res
+      .status(400)
+      .json({ message: "Course name and section ID are required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  // Check if user is the creator or admin
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin"
+  ) {
+    return res
+      .status(403)
+      .json({ message: "Not authorized to modify this course" });
+  }
+
+  // Find the section to delete
+  const sectionIndex = course.sections.findIndex(
+    (section) => section._id.toString() === sectionId
+  );
+  if (sectionIndex === -1) {
+    return res.status(404).json({ message: "Section not found" });
+  }
+
+  const sectionToDelete = course.sections[sectionIndex];
+
+  // Delete associated files
+  // Delete videos
+  sectionToDelete.videos.forEach((video) => {
+    if (video.filename) {
+      const videoPath = path.join("src", "uploads", "videos", video.filename);
+      fs.unlink(videoPath, () => {});
+    }
+  });
+
+  // Delete PDFs
+  sectionToDelete.pdfs.forEach((pdf) => {
+    if (pdf.filename) {
+      const pdfPath = path.join("src", "uploads", "pdfs", pdf.filename);
+      fs.unlink(pdfPath, () => {});
+    }
+  });
+
+  // Remove the section from the course
+  course.sections.splice(sectionIndex, 1);
+  await course.save();
+
+  res.status(200).json({
+    message: "Section deleted successfully",
+    course: course,
+  });
 });
 
 // @desc Get my notifications

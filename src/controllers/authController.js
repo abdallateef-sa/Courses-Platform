@@ -95,17 +95,41 @@ export const login = asyncHandler(async (req, res) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
 
+  // Check if student is already logged in (admin can login multiple times)
+  if (user.role === "student" && user.isLoggedIn) {
+    return res.status(403).json({
+      message:
+        "Student is already logged in from another device. Please logout first or contact admin.",
+    });
+  }
+
+  // Mark student as logged in (only for students)
+  if (user.role === "student") {
+    user.isLoggedIn = true;
+    await user.save();
+  }
+
   rateLimitMap.delete(emailOrPhone);
 
   const token = generateJWT({ id: user._id, role: user.role });
   res.json({
     token,
-    user: { id: user._id, fullName: user.fullName, role: user.role },
+    user: {
+      id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      role: user.role,
+    },
   });
 });
 
 // @desc Logout
 export const logout = asyncHandler(async (req, res) => {
+  // Mark student as logged out (only for students)
+  if (req.user && req.user.role === "student") {
+    await User.findByIdAndUpdate(req.user._id, { isLoggedIn: false });
+  }
+
   res.clearCookie("token"); // if using cookies
   res.status(200).json({ message: "Logged out successfully" });
 });
@@ -206,4 +230,53 @@ export const resetPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   res.json({ message: "Password reset successfully" });
+});
+
+// @desc Allow student to login (Admin only)
+export const allowStudentLogin = asyncHandler(async (req, res) => {
+  const { emailOrPhone } = req.body;
+
+  if (!emailOrPhone) {
+    return res.status(400).json({ message: "Email or phone is required" });
+  }
+
+  const normalizedInput = emailOrPhone.includes("@")
+    ? emailOrPhone.toLowerCase()
+    : emailOrPhone;
+
+  const student = await User.findOne({
+    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
+    role: "student",
+  });
+
+  if (!student) {
+    return res.status(404).json({ message: "Student not found" });
+  }
+
+  // Allow student to login by setting isLoggedIn to false
+  student.isLoggedIn = false;
+  await student.save();
+
+  res.status(200).json({
+    message: `Login access granted for student: ${student.fullName}`,
+    student: {
+      id: student._id,
+      fullName: student.fullName,
+      email: student.email,
+      phone: student.phone,
+    },
+  });
+});
+
+// @desc Get all logged in students (Admin only)
+export const getLoggedInStudents = asyncHandler(async (req, res) => {
+  const loggedInStudents = await User.find({
+    role: "student",
+    isLoggedIn: true,
+  }).select("fullName email phone createdAt");
+
+  res.status(200).json({
+    count: loggedInStudents.length,
+    students: loggedInStudents,
+  });
 });

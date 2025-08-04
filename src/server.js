@@ -12,8 +12,9 @@ import path from "path";
 // Create folders if not exist
 const imagePath = path.join("src", "uploads", "images");
 const pdfPath = path.join("src", "uploads", "pdfs");
+const videoPath = path.join("src", "uploads", "videos");
 
-[imagePath, pdfPath].forEach((folder) => {
+[imagePath, pdfPath, videoPath].forEach((folder) => {
   if (!fs.existsSync(folder)) {
     fs.mkdirSync(folder, { recursive: true });
     console.log(`Created folder: ${folder}`);
@@ -29,9 +30,19 @@ const app = express();
 app.use(express.json({ limit: "20kb" }));
 app.use(cors());
 
-// Serve images and pdfs statically
-app.use('/api/v1/uploads/images', express.static(path.join(process.cwd(), 'src/uploads/images')));
-app.use('/api/v1/uploads/pdfs', express.static(path.join(process.cwd(), 'src/uploads/pdfs')));
+// Serve images, pdfs, and videos statically
+app.use(
+  "/api/v1/uploads/images",
+  express.static(path.join(process.cwd(), "src/uploads/images"))
+);
+app.use(
+  "/api/v1/uploads/pdfs",
+  express.static(path.join(process.cwd(), "src/uploads/pdfs"))
+);
+app.use(
+  "/api/v1/uploads/videos",
+  express.static(path.join(process.cwd(), "src/uploads/videos"))
+);
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
