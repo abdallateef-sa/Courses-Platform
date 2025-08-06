@@ -5,8 +5,6 @@ import Notification from "../models/notificationModel.js";
 import fs from "fs";
 import path from "path";
 
-// ...existing code...
-
 // @desc Create new course (admin only)
 export const createCourse = asyncHandler(async (req, res) => {
   const { name, teacher, followGroup, price, whatsappNumber } = req.body;
