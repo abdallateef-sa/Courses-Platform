@@ -23,8 +23,16 @@ const formatCourseData = (course, req) => {
     teacher: course.teacher,
     price: course.price,
     whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
+    createdBy: course.createdBy,
+    lockedFor: course.lockedFor,
+    comments: course.comments.map((comment) => ({
+      _id: comment._id,
+      message: comment.message,
+      createdAt: comment.createdAt,
+    })),
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
     sections: course.sections.map((section) => ({
