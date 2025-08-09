@@ -244,9 +244,15 @@ export const addSection = asyncHandler(async (req, res) => {
 // @desc List all courses (public info)
 export const listCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find();
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
   const formattedCourses = courses.map((course) => ({
     _id: course._id,
     name: course.name,
@@ -291,17 +297,31 @@ export const getCourse = asyncHandler(async (req, res) => {
   if (!course) {
     return res.status(404).json({ message: "Course not found" });
   }
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
   const formattedCourse = {
     _id: course._id,
     name: course.name,
     teacher: course.teacher,
     price: course.price,
     whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
+    createdBy: course.createdBy,
+    lockedFor: course.lockedFor,
+    comments: course.comments.map((comment) => ({
+      _id: comment._id,
+      message: comment.message,
+      createdAt: comment.createdAt,
+    })),
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
     sections: course.sections.map((section) => ({
@@ -358,9 +378,15 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({ lockedFor: req.user._id });
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
-  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
-  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
   const formattedCourses = courses.map((course) => ({
     _id: course._id,
     name: course.name,
