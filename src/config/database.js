@@ -6,7 +6,7 @@ const dbConnection = () => {
     .then((conn) => {
       console.log(`Database: ${conn.connection.host}`);
     })
-    
+
 };
 
 export default dbConnection;

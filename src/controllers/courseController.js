@@ -244,10 +244,37 @@ export const addSection = asyncHandler(async (req, res) => {
 // @desc List all courses (public info)
 export const listCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find();
-  const formattedCourses = courses.map((course) =>
-    formatCourseData(course, req)
-  );
-
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const formattedCourses = courses.map((course) => ({
+    _id: course._id,
+    name: course.name,
+    teacher: course.teacher,
+    price: course.price,
+    whatsappNumber: course.whatsappNumber,
+    image: course.image,
+    imageUrl: course.image ? imageBaseUrl + course.image : null,
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+    sections: course.sections.map((section) => ({
+      _id: section._id,
+      title: section.title,
+      videos: section.videos.map((video) => ({
+        _id: video._id,
+        label: video.label,
+        filename: video.filename,
+        url: videoBaseUrl + video.filename,
+      })),
+      pdfs: section.pdfs.map((pdf) => ({
+        _id: pdf._id,
+        label: pdf.label,
+        filename: pdf.filename,
+        url: pdfBaseUrl + pdf.filename,
+        downloadable: pdf.downloadable || false,
+      })),
+    })),
+  }));
   res.status(200).json({
     count: courses.length,
     courses: formattedCourses,
@@ -257,17 +284,44 @@ export const listCourses = asyncHandler(async (req, res) => {
 // @desc Get course detail for student
 export const getCourse = asyncHandler(async (req, res) => {
   const { courseName } = req.query;
-
   if (!courseName) {
     return res.status(400).json({ message: "Course name is required" });
   }
-
   const course = await Course.findOne({ name: courseName });
   if (!course) {
     return res.status(404).json({ message: "Course not found" });
   }
-
-  const formattedCourse = formatCourseData(course, req);
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const formattedCourse = {
+    _id: course._id,
+    name: course.name,
+    teacher: course.teacher,
+    price: course.price,
+    whatsappNumber: course.whatsappNumber,
+    image: course.image,
+    imageUrl: course.image ? imageBaseUrl + course.image : null,
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+    sections: course.sections.map((section) => ({
+      _id: section._id,
+      title: section.title,
+      videos: section.videos.map((video) => ({
+        _id: video._id,
+        label: video.label,
+        filename: video.filename,
+        url: videoBaseUrl + video.filename,
+      })),
+      pdfs: section.pdfs.map((pdf) => ({
+        _id: pdf._id,
+        label: pdf.label,
+        filename: pdf.filename,
+        url: pdfBaseUrl + pdf.filename,
+        downloadable: pdf.downloadable || false,
+      })),
+    })),
+  };
   res.status(200).json(formattedCourse);
 });
 
@@ -304,10 +358,37 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({ lockedFor: req.user._id });
-  const formattedCourses = courses.map((course) =>
-    formatCourseData(course, req)
-  );
-
+  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/pdfs/`;
+  const formattedCourses = courses.map((course) => ({
+    _id: course._id,
+    name: course.name,
+    teacher: course.teacher,
+    price: course.price,
+    whatsappNumber: course.whatsappNumber,
+    image: course.image,
+    imageUrl: course.image ? imageBaseUrl + course.image : null,
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+    sections: course.sections.map((section) => ({
+      _id: section._id,
+      title: section.title,
+      videos: section.videos.map((video) => ({
+        _id: video._id,
+        label: video.label,
+        filename: video.filename,
+        url: videoBaseUrl + video.filename,
+      })),
+      pdfs: section.pdfs.map((pdf) => ({
+        _id: pdf._id,
+        label: pdf.label,
+        filename: pdf.filename,
+        url: pdfBaseUrl + pdf.filename,
+        downloadable: pdf.downloadable || false,
+      })),
+    })),
+  }));
   res.status(200).json({
     count: courses.length,
     courses: formattedCourses,
