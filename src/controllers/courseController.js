@@ -4,6 +4,7 @@ import User from "../models/userModel.js";
 import Notification from "../models/notificationModel.js";
 import fs from "fs";
 import path from "path";
+import { fcm } from "../config/firebase.js";
 
 // Helper function to format course data
 const formatCourseData = (course, req) => {
@@ -69,6 +70,57 @@ export const createCourse = asyncHandler(async (req, res) => {
     createdBy,
     image: req.file?.filename || null,
   });
+
+  // Get all users to send notifications
+  const allUsers = await User.find({ role: "student" }, "_id fcmToken");
+
+  if (allUsers.length > 0) {
+    // Add notifications to DB for all users
+    const notifications = allUsers.map((user) => ({
+      userId: user._id,
+      courseName: name,
+      message: `New course available: ${name} by ${teacher}`,
+    }));
+    await Notification.insertMany(notifications);
+
+    // Get FCM tokens for push notifications
+    const tokens = allUsers.map((u) => u.fcmToken).filter(Boolean);
+
+    if (tokens.length > 0) {
+      const messagePayload = {
+        tokens,
+        notification: {
+          title: "New Course Available!",
+          body: `${name} by ${teacher} is now available`,
+        },
+        data: {
+          courseName: name,
+          teacher: teacher,
+          type: "new_course",
+          timestamp: new Date().toISOString(),
+        },
+      };
+
+      try {
+        const response = await fcm.sendEachForMulticast(messagePayload);
+        console.log(
+          "✅ FCM notifications sent for new course:",
+          response.successCount,
+          "success"
+        );
+        if (response.failureCount > 0) {
+          console.log(
+            "❌ Failed tokens:",
+            response.responses.filter((r) => !r.success).length
+          );
+        }
+      } catch (error) {
+        console.error("❌ Error sending FCM for new course:", error);
+      }
+    } else {
+      console.log("📱 No FCM tokens found for users");
+    }
+  }
 
   res.status(201).json({
     message: "Course created successfully",
@@ -433,18 +485,55 @@ export const addComment = asyncHandler(async (req, res) => {
   const course = await Course.findOne({ name: courseName });
   if (!course) return res.status(404).json({ message: "Course not found" });
 
-  // أضف التعليق للكورس
+  // Add comment
   course.comments.push({ message });
   await course.save();
 
-  // أرسل إشعار لكل طالب مشترك (lockedFor)
+  // Add notification in DB
   const notifications = course.lockedFor.map((userId) => ({
     userId,
     courseName,
     message: `New comment on ${courseName}: ${message}`,
   }));
+  await Notification.insertMany(notifications);
 
-  await Notification.insertMany(notifications); // حفظ الإشعارات دفعة واحدة
+  // Get FCM tokens
+  const users = await User.find({ _id: { $in: course.lockedFor } }, "fcmToken");
+  const tokens = users.map((u) => u.fcmToken).filter(Boolean);
+
+  if (tokens.length > 0) {
+    const messagePayload = {
+      tokens,
+      notification: {
+        title: `New comment on ${courseName}`,
+        body: message,
+      },
+      data: {
+        courseName,
+        type: "comment",
+        timestamp: new Date().toISOString(),
+      },
+    };
+
+    try {
+      const response = await fcm.sendEachForMulticast(messagePayload);
+      console.log(
+        "✅ FCM notifications sent:",
+        response.successCount,
+        "success"
+      );
+      if (response.failureCount > 0) {
+        console.log(
+          "❌ Failed tokens:",
+          response.responses.filter((r) => !r.success).length
+        );
+      }
+    } catch (error) {
+      console.error("❌ Error sending FCM:", error);
+    }
+  } else {
+    console.log("📱 No FCM tokens found for course students");
+  }
 
   res.status(200).json({ message: "Comment added and notifications sent" });
 });
