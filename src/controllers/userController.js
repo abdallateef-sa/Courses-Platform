@@ -106,22 +106,3 @@ export const updateFCMToken = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc Get current user profile with FCM token (for testing)
-export const getMyProfile = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id).select("-password -__v");
-
-  if (!user) {
-    return res.status(404).json({ message: "User not found" });
-  }
-
-  const imageBaseUrl = `${req.protocol}://${req.get(
-    "host"
-  )}/api/v1/uploads/images/`;
-
-  res.status(200).json({
-    user: {
-      ...user.toObject(),
-      cardImage: user.cardImage ? imageBaseUrl + user.cardImage : null,
-    },
-  });
-});
