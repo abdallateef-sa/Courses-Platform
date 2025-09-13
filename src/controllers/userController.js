@@ -15,16 +15,15 @@ export const searchUser = asyncHandler(async (req, res) => {
 
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
 
   const userObj = user.toObject();
-  if (userObj.cardImage)
-    userObj.cardImage = imageBaseUrl + userObj.cardImage;
+  if (userObj.cardImage) userObj.cardImage = imageBaseUrl + userObj.cardImage;
 
   res.status(200).json({ user: userObj });
 });
-
-
 
 // @desc delete User by mail or phone
 export const deleteUser = asyncHandler(async (req, res) => {
@@ -52,13 +51,17 @@ export const deleteUser = asyncHandler(async (req, res) => {
 
 // @desc get All Users
 export const getAllStudents = asyncHandler(async (req, res) => {
-  const students = await User.find({ role: 'student' }).select('-password -__v');
+  const students = await User.find({ role: "student" }).select(
+    "-password -__v"
+  );
 
   if (!students || students.length === 0) {
-    return res.status(404).json({ message: 'No students found' });
+    return res.status(404).json({ message: "No students found" });
   }
 
-  const imageBaseUrl = `${req.protocol}://${req.get("host")}/api/v1/uploads/images/`;
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
 
   const formattedStudents = students.map((student) => {
     const studentObj = student.toObject();
@@ -67,7 +70,9 @@ export const getAllStudents = asyncHandler(async (req, res) => {
     return studentObj;
   });
 
-  res.status(200).json({ count: formattedStudents.length, students: formattedStudents });
+  res
+    .status(200)
+    .json({ count: formattedStudents.length, students: formattedStudents });
 });
 
 // @desc Update FCM Token for push notifications
@@ -89,13 +94,13 @@ export const updateFCMToken = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "User not found" });
   }
 
-  res.status(200).json({ 
+  res.status(200).json({
     message: "FCM token updated successfully",
     user: {
       _id: user._id,
       fullName: user.fullName,
       email: user.email,
-      fcmTokenUpdated: true
-    }
+      fcmTokenUpdated: true,
+    },
   });
 });
