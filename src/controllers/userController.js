@@ -69,3 +69,33 @@ export const getAllStudents = asyncHandler(async (req, res) => {
 
   res.status(200).json({ count: formattedStudents.length, students: formattedStudents });
 });
+
+// @desc Update FCM Token for push notifications
+export const updateFCMToken = asyncHandler(async (req, res) => {
+  const { fcmToken } = req.body;
+  const userId = req.user._id;
+
+  if (!fcmToken) {
+    return res.status(400).json({ message: "FCM token is required" });
+  }
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { fcmToken },
+    { new: true }
+  ).select("-password -__v");
+
+  if (!user) {
+    return res.status(404).json({ message: "User not found" });
+  }
+
+  res.status(200).json({ 
+    message: "FCM token updated successfully",
+    user: {
+      _id: user._id,
+      fullName: user.fullName,
+      email: user.email,
+      fcmTokenUpdated: true
+    }
+  });
+});

@@ -5,6 +5,7 @@ import {
   searchUser,
   deleteUser,
   getAllStudents,
+  updateFCMToken,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -13,6 +14,9 @@ const router = express.Router();
 router.get("/search", isAuth, isAdmin, searchUser);
 router.delete("/delete", isAuth, isAdmin, deleteUser);
 router.get("/students", isAuth, isAdmin, getAllStudents);
+
+// Student Routes
+router.put("/fcm-token", isAuth, updateFCMToken);
 
 export default router;
 
