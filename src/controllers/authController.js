@@ -21,7 +21,7 @@ export const register = asyncHandler(async (req, res) => {
   } = req.body;
 
   const userRole = role || "student";
-  const normalizedEmail = email.toLowerCase(); //  lowercase
+  const normalizedEmail = email.trim().toLowerCase();
 
   if (userRole === "student" && !req.file) {
     return res
@@ -30,7 +30,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   const exists = await User.findOne({
-    $or: [{ email: normalizedEmail }, { phone }],
+    $or: [{ email: normalizedEmail }, { phone: phone.trim() }],
   });
   if (exists) {
     if (req.file) {
@@ -53,13 +53,13 @@ export const register = asyncHandler(async (req, res) => {
   const hashedPassword = await bcrypt.hash(password.trim(), 10);
 
   const newUser = await User.create({
-    fullName,
+    fullName: fullName.trim(),
     email: normalizedEmail,
-    phone,
+    phone: phone.trim(),
     password: hashedPassword,
     year,
     departmentType,
-    university,
+    university: university.trim(),
     cardImage: req.file?.filename || null,
     role: userRole,
   });
