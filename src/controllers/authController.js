@@ -82,9 +82,13 @@ export const register = asyncHandler(async (req, res) => {
 export const login = asyncHandler(async (req, res) => {
   const { emailOrPhone, password } = req.body;
 
-  const normalizedInput = emailOrPhone.includes("@")
-    ? emailOrPhone.toLowerCase()
-    : emailOrPhone;
+  // Normalize input: trim and lowercase if email
+  const rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  const normalizedInput =
+    typeof rawInput === "string" && rawInput.includes("@")
+      ? rawInput.toLowerCase()
+      : rawInput;
 
   const user = await User.findOne({
     $or: [{ email: normalizedInput }, { phone: normalizedInput }],
@@ -109,7 +113,7 @@ export const login = asyncHandler(async (req, res) => {
     await user.save();
   }
 
-  rateLimitMap.delete(emailOrPhone);
+  rateLimitMap.delete(rawInput);
 
   const token = generateJWT({ id: user._id, role: user.role });
   res.json({
@@ -140,9 +144,12 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   if (!emailOrPhone)
     return res.status(400).json({ message: "Please provide email or phone" });
 
-  const normalizedInput = emailOrPhone.includes("@")
-    ? emailOrPhone.toLowerCase()
-    : emailOrPhone;
+  const rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  const normalizedInput =
+    typeof rawInput === "string" && rawInput.includes("@")
+      ? rawInput.toLowerCase()
+      : rawInput;
 
   const user = await User.findOne({
     $or: [{ email: normalizedInput }, { phone: normalizedInput }],
@@ -189,10 +196,12 @@ export const verifyResetCode = asyncHandler(async (req, res) => {
       .status(400)
       .json({ message: "Email/phone and reset code are required" });
   }
-
-  const normalizedInput = emailOrPhone.includes("@")
-    ? emailOrPhone.toLowerCase()
-    : emailOrPhone;
+  const rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  const normalizedInput =
+    typeof rawInput === "string" && rawInput.includes("@")
+      ? rawInput.toLowerCase()
+      : rawInput;
 
   const user = await User.findOne({
     $or: [{ email: normalizedInput }, { phone: normalizedInput }],
@@ -240,9 +249,12 @@ export const allowStudentLogin = asyncHandler(async (req, res) => {
     return res.status(400).json({ message: "Email or phone is required" });
   }
 
-  const normalizedInput = emailOrPhone.includes("@")
-    ? emailOrPhone.toLowerCase()
-    : emailOrPhone;
+  const rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  const normalizedInput =
+    typeof rawInput === "string" && rawInput.includes("@")
+      ? rawInput.toLowerCase()
+      : rawInput;
 
   const student = await User.findOne({
     $or: [{ email: normalizedInput }, { phone: normalizedInput }],
