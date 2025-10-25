@@ -104,7 +104,8 @@ const uploadVideosAndPdfs = multer({
     },
     filename: (req, file, cb) => {
       const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      let prefix = file.fieldname === "videos" ? "temp-video-" : "pdf-";
+      // No temp prefix since we're not compressing
+      let prefix = file.fieldname === "videos" ? "video-" : "pdf-";
       cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     },
   }),

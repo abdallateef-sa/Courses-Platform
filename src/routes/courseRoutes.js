@@ -17,10 +17,7 @@ import { isAuth } from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/roleMiddleware.js";
 import { uploadPdfs } from "../middlewares/uploadPdfMiddleware.js";
 import { uploadImage } from "../middlewares/uploadImagesMiddleware.js";
-import {
-  uploadVideosAndPdfs,
-  compressVideosMiddleware,
-} from "../middlewares/uploadVideoMiddleware.js";
+import { uploadVideosAndPdfs } from "../middlewares/uploadVideoMiddleware.js";
 
 const router = express.Router();
 
@@ -51,7 +48,6 @@ router.post(
     { name: "videos", maxCount: 10 },
     { name: "pdfs", maxCount: 10 },
   ]),
-  compressVideosMiddleware,
   addSection
 );
 router.delete("/delete", isAuth, isAdmin, deleteCourse);
