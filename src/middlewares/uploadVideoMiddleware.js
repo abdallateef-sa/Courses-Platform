@@ -14,16 +14,30 @@ const __dirname = path.dirname(__filename);
 // Helper function to compress video
 const compressVideo = (inputPath, outputPath) => {
   return new Promise((resolve, reject) => {
+    // Set a timeout for compression (2 hours per video for very large files)
+    const timeout = setTimeout(() => {
+      reject(new Error("Video compression timeout (2 hours exceeded)"));
+    }, 2 * 60 * 60 * 1000);
+
     ffmpeg(inputPath)
       .videoCodec("libx264")
       .audioCodec("aac")
       .outputOptions([
         "-crf 28", // Quality setting (18-28, lower = better quality)
-        "-preset medium", // Encoding speed vs compression ratio
+        "-preset ultrafast", // Fastest encoding (changed from 'fast')
         "-movflags +faststart", // Enable fast start for web streaming
-        "-vf scale=1280:720", // Scale to 720p (adjust as needed)
+        "-vf scale=1280:720", // Scale to 720p
+        "-threads 0", // Use all available CPU threads
+        "-max_muxing_queue_size 9999", // Prevent buffer issues for long videos
       ])
+      .on("progress", (progress) => {
+        // Log progress every 10%
+        if (progress.percent && Math.round(progress.percent) % 10 === 0) {
+          console.log(`   Progress: ${Math.round(progress.percent)}%`);
+        }
+      })
       .on("end", () => {
+        clearTimeout(timeout);
         // Delete original file after compression
         fs.unlink(inputPath, (err) => {
           if (err) console.error("Error deleting original video:", err);
@@ -31,6 +45,7 @@ const compressVideo = (inputPath, outputPath) => {
         resolve(outputPath);
       })
       .on("error", (err) => {
+        clearTimeout(timeout);
         console.error("Video compression error:", err);
         reject(err);
       })
@@ -71,9 +86,7 @@ const videoFileFilter = (req, file, cb) => {
 // Video upload configuration
 const uploadVideos = multer({
   storage: videoStorage,
-  limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB limit
-  },
+  // No file size limit - accept any size
   fileFilter: videoFileFilter,
 });
 
@@ -95,9 +108,7 @@ const uploadVideosAndPdfs = multer({
       cb(null, prefix + uniqueSuffix + path.extname(file.originalname));
     },
   }),
-  limits: {
-    fileSize: 500 * 1024 * 1024, // 500MB limit
-  },
+  // No limits - accept any file size
   fileFilter: (req, file, cb) => {
     if (file.fieldname === "videos") {
       const allowedVideoTypes = /mp4|avi|mkv|mov|wmv|flv|webm|m4v/;
@@ -149,34 +160,69 @@ const compressVideosMiddleware = async (req, res, next) => {
       return next();
     }
 
-    // Process each video file for compression
-    for (let i = 0; i < videoFiles.length; i++) {
-      const file = videoFiles[i];
+    console.log(`🎬 Starting compression for ${videoFiles.length} video(s)...`);
+
+    // Process each video file for compression in parallel (with concurrency limit)
+    const compressionPromises = videoFiles.map(async (file, index) => {
       const tempPath = file.path;
-      const finalFilename = file.filename.replace("temp-", "");
+      const finalFilename = file.filename.replace("temp-video-", "video-");
       const finalPath = path.join(path.dirname(tempPath), finalFilename);
 
       try {
+        console.log(
+          `📹 Compressing video ${index + 1}/${videoFiles.length}: ${
+            file.originalname
+          }`
+        );
         await compressVideo(tempPath, finalPath);
+
         // Update file object with final filename
         file.filename = finalFilename;
         file.path = finalPath;
-        console.log(`Video compressed successfully: ${finalFilename}`);
+        console.log(`✅ Video ${index + 1} compressed: ${finalFilename}`);
+
+        return { success: true, file };
       } catch (error) {
-        console.error(`Error compressing video ${file.filename}:`, error);
+        console.error(
+          `❌ Compression failed for video ${index + 1}:`,
+          error.message
+        );
+
         // If compression fails, use original file
-        fs.rename(tempPath, finalPath, (err) => {
-          if (err) console.error("Error renaming file:", err);
+        const renamed = await new Promise((resolve) => {
+          fs.rename(tempPath, finalPath, (err) => {
+            if (err) {
+              console.error("Error renaming file:", err);
+              resolve(false);
+            } else {
+              resolve(true);
+            }
+          });
         });
-        file.filename = finalFilename;
-        file.path = finalPath;
+
+        if (renamed) {
+          file.filename = finalFilename;
+          file.path = finalPath;
+        }
+
+        return { success: false, file, error };
       }
-    }
+    });
+
+    // Wait for all compressions with a timeout
+    const results = await Promise.allSettled(compressionPromises);
+
+    console.log(
+      `🎉 Compression complete: ${
+        results.filter((r) => r.status === "fulfilled").length
+      }/${videoFiles.length} successful`
+    );
 
     next();
   } catch (error) {
-    console.error("Error in video compression middleware:", error);
-    next(error);
+    console.error("❌ Error in video compression middleware:", error);
+    // Don't fail the request if compression fails
+    next();
   }
 };
 

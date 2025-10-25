@@ -28,7 +28,14 @@ dotenv.config();
 dbConnection();
 
 const app = express();
-app.use(express.json({ limit: "20kb" }));
+
+// Increase body size limits for large file uploads (no limit)
+app.use(express.json({ limit: "5gb" }));
+app.use(
+  express.urlencoded({ limit: "5gb", extended: true, parameterLimit: 500000 })
+);
+
+// CORS configuration
 app.use(cors());
 
 // Serve images, pdfs, and videos statically
@@ -84,6 +91,12 @@ const PORT = process.env.PORT || 4000;
 const server = app.listen(PORT, () => {
   console.log("server run on port", PORT);
 });
+
+// Increase timeout for very large file uploads (2 hours)
+// Needed for long videos (e.g., 3-hour lectures)
+server.timeout = 7200000; // 2 hours
+server.keepAliveTimeout = 7200000;
+server.headersTimeout = 7210000;
 
 // handel rejection outside express
 process.on("unhandledRejection", (err) => {
