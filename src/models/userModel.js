@@ -11,16 +11,35 @@ const userSchema = new mongoose.Schema(
     },
     phone: { type: String, required: true, unique: true },
     password: { type: String, required: true },
-    year: { type: Number, required: true },
+    year: {
+      type: Number,
+      required: function () {
+        return this.role === "student";
+      },
+    },
     departmentType: {
       type: String,
       enum: ["public", "private"],
-      required: true,
+      required: function () {
+        return this.role === "student";
+      },
     },
-    university: { type: String, required: true },
+    university: {
+      type: String,
+      required: function () {
+        return this.role === "student";
+      },
+    },
     cardImage: { type: String },
-    role: { type: String, enum: ["student", "admin"], default: "student" },
-    isLoggedIn: { type: Boolean, default: false }, // للتحكم في جلسة الطالب
+    role: {
+      type: String,
+      enum: ["student", "admin", "superadmin"],
+      default: "student",
+    },
+    // Admin management fields
+    adminActive: { type: Boolean, default: true },
+    adminBadge: { type: String, default: null },
+    wasAdmin: { type: Boolean, default: false },
     passwordResetCode: String,
     passwordResetExpires: Date,
     passwordResetVerified: Boolean,

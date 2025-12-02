@@ -1,13 +1,14 @@
 import express from "express";
 import {
   registerStudent,
-  registerAdmin,
   verifyStudentRegistration,
   login,
   logout,
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  createAdminBySuper,
+  updateAdminStatus,
 } from "../controllers/authController.js";
 import { uploadImage } from "../middlewares/uploadImagesMiddleware.js";
 import { registerRules } from "../utils/validators/authValidator.js"; // existing rules cover student fields
@@ -28,8 +29,10 @@ router.post(
 // Verify student registration OTP and create account
 router.post("/register/student/verify", verifyStudentRegistration);
 
-// Admin registration (basic fields only)
-router.post("/register/admin", registerAdmin);
+// Admin registration disabled for public; use superadmin endpoints below
+// Superadmin endpoints
+router.post("/super/admin/create", isAuth, createAdminBySuper);
+router.post("/super/admin/update-status", isAuth, updateAdminStatus);
 router.post("/login", loginLimiter, login);
 router.post("/logout", isAuth, logout);
 router.post("/forgot-password", forgotPassword);
@@ -38,6 +41,77 @@ router.post("/reset-password", resetPassword);
 
 export default router;
 
+/**
+ * @swagger
+ * /api/v1/auth/super/admin/create:
+ *   post:
+ *     summary: Superadmin - Create admin
+ *     description: Create a new admin user. Only accessible to superadmin. Admins cannot create other admins.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [fullName, email, phone, password]
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               phone:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *               adminBadge:
+ *                 type: string
+ *                 description: Optional visual badge for admin
+ *     responses:
+ *       201:
+ *         description: Admin created
+ *       403:
+ *         description: Only superadmin can access
+ *       409:
+ *         description: Email or phone exists
+ */
+
+/**
+ * @swagger
+ * /api/v1/auth/super/admin/update-status:
+ *   post:
+ *     summary: Superadmin - Activate/deactivate admin
+ *     description: Toggle `adminActive` for a target admin. Only accessible to superadmin.
+ *     tags: [Authentication]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [adminId, active]
+ *             properties:
+ *               adminId:
+ *                 type: string
+ *               active:
+ *                 type: boolean
+ *                 description: Set true to activate, false to deactivate
+ *     responses:
+ *       200:
+ *         description: Admin status updated
+ *       400:
+ *         description: Target is not an admin or missing fields
+ *       403:
+ *         description: Only superadmin can access
+ *       404:
+ *         description: Admin not found
+ */
 /**
  * @swagger
  * /api/v1/auth/register/student:
@@ -175,7 +249,7 @@ export default router;
  * /api/v1/auth/login:
  *   post:
  *     summary: User login
- *     description: Authenticate user and return JWT token. Students must verify email before login.
+ *     description: Authenticate user and return JWT token. Students must verify email before login. Inactive admins are blocked from logging in.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true

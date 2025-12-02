@@ -181,6 +181,9 @@ export const registerAdmin = asyncHandler(async (req, res) => {
     university: university?.trim(),
     cardImage: req.file?.filename || null,
     role: "admin",
+    adminActive: true,
+    adminBadge: req.body.adminBadge || null,
+    wasAdmin: true,
   });
 
   const token = generateJWT({ id: newUser._id, role: newUser.role });
@@ -193,6 +196,79 @@ export const registerAdmin = asyncHandler(async (req, res) => {
       email: normalizedEmail,
       phone,
       role: newUser.role,
+      adminActive: newUser.adminActive,
+      adminBadge: newUser.adminBadge,
+    },
+  });
+});
+
+// @desc Superadmin: create an admin
+export const createAdminBySuper = asyncHandler(async (req, res) => {
+  const requester = await User.findById(req.user._id);
+  if (!requester || requester.role !== "superadmin") {
+    return res
+      .status(403)
+      .json({ message: "Only superadmin can create admins" });
+  }
+
+  const { fullName, email, phone, password, adminBadge } = req.body;
+  if (!fullName || !email || !phone || !password) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+  const normalizedEmail = email.trim().toLowerCase();
+  const exists = await User.findOne({
+    $or: [{ email: normalizedEmail }, { phone: phone.trim() }],
+  });
+  if (exists) return res.status(409).json({ message: "Email or phone exists" });
+
+  const hashedPassword = await bcrypt.hash(password.trim(), 10);
+  const admin = await User.create({
+    fullName: fullName.trim(),
+    email: normalizedEmail,
+    phone: phone.trim(),
+    password: hashedPassword,
+    role: "admin",
+    adminActive: true,
+    adminBadge: adminBadge || null,
+    wasAdmin: true,
+  });
+  res.status(201).json({
+    message: "Admin created",
+    admin: {
+      id: admin._id,
+      fullName: admin.fullName,
+      email: admin.email,
+      adminBadge: admin.adminBadge,
+    },
+  });
+});
+
+// @desc Superadmin: toggle admin active only
+export const updateAdminStatus = asyncHandler(async (req, res) => {
+  const requester = await User.findById(req.user._id);
+  if (!requester || requester.role !== "superadmin") {
+    return res
+      .status(403)
+      .json({ message: "Only superadmin can manage admins" });
+  }
+  const { adminId, active } = req.body;
+  if (!adminId) return res.status(400).json({ message: "adminId is required" });
+  const admin = await User.findById(adminId);
+  if (!admin) return res.status(404).json({ message: "Admin not found" });
+  if (admin.role !== "admin") {
+    return res.status(400).json({ message: "Target user is not an admin" });
+  }
+
+  if (typeof active === "boolean") admin.adminActive = active;
+  await admin.save();
+  res.status(200).json({
+    message: "Admin status updated",
+    admin: {
+      id: admin._id,
+      role: admin.role,
+      adminActive: admin.adminActive,
+      adminBadge: admin.adminBadge,
+      wasAdmin: admin.wasAdmin,
     },
   });
 });
@@ -218,6 +294,11 @@ export const login = asyncHandler(async (req, res) => {
   // Require email verification for students
   if (user.role === "student" && !user.emailVerified) {
     return res.status(403).json({ message: "Please verify your email first" });
+  }
+
+  // Block inactive admins from logging in
+  if (user.role === "admin" && user.adminActive === false) {
+    return res.status(403).json({ message: "Admin account is deactivated" });
   }
 
   const isMatch = await bcrypt.compare(password, user.password);
@@ -347,4 +428,3 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   res.json({ message: "Password reset successfully" });
 });
-

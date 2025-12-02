@@ -131,7 +131,8 @@ export const updateCourse = asyncHandler(async (req, res) => {
   // Check authorization
   if (
     course.createdBy.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
   ) {
     return res.status(403).json({
       message: "Not authorized to update this course",
@@ -773,7 +774,8 @@ export const setCourseStatus = asyncHandler(async (req, res) => {
   // only creator admin or admin role can update
   if (
     course.createdBy.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
   ) {
     return res.status(403).json({ message: "Not authorized to update status" });
   }
@@ -798,7 +800,8 @@ export const addCourseNote = asyncHandler(async (req, res) => {
 
   if (
     course.createdBy.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
   ) {
     return res.status(403).json({ message: "Not authorized to add notes" });
   }
@@ -870,7 +873,8 @@ export const deleteCourseNote = asyncHandler(async (req, res) => {
 
   if (
     course.createdBy.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
   ) {
     return res.status(403).json({ message: "Not authorized to delete notes" });
   }
@@ -1037,7 +1041,8 @@ export const deleteSection = asyncHandler(async (req, res) => {
   // Check if user is the creator or admin
   if (
     course.createdBy.toString() !== req.user._id.toString() &&
-    req.user.role !== "admin"
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
   ) {
     return res
       .status(403)

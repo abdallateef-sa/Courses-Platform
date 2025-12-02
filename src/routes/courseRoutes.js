@@ -96,8 +96,8 @@ export default router;
  * @swagger
  * /api/v1/course/getAllCourses/Admin:
  *   get:
- *     summary: Get all courses (Admin only)
- *     description: Admin can view all courses regardless of published status.
+ *     summary: Get all courses (Admin/Superadmin)
+ *     description: Admin and superadmin can view all courses regardless of published status. Inactive admins are blocked.
  *     tags: [Courses]
  *     security:
  *       - bearerAuth: []
@@ -117,7 +117,7 @@ export default router;
  *                   items:
  *                     $ref: '#/components/schemas/Course'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -128,7 +128,7 @@ export default router;
  * @swagger
  * /api/v1/course/create:
  *   post:
- *     summary: Create new course (Admin only)
+ *     summary: Create new course (Admin/Superadmin)
  *     description: Create a new course with basic information and optional image
  *     tags: [Courses]
  *     security:
@@ -179,7 +179,7 @@ export default router;
  *                 data:
  *                   $ref: '#/components/schemas/Course'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -190,7 +190,7 @@ export default router;
  * @swagger
  * /api/v1/course/update:
  *   put:
- *     summary: Update course (Admin only)
+ *     summary: Update course (Admin/Superadmin)
  *     description: Update existing course information
  *     tags: [Courses]
  *     security:
@@ -243,7 +243,7 @@ export default router;
  *                 data:
  *                   $ref: '#/components/schemas/Course'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -260,7 +260,7 @@ export default router;
  * @swagger
  * /api/v1/course/search/AdminID:
  *   get:
- *     summary: Search courses by admin (Admin only)
+ *     summary: Search courses by admin (Admin/Superadmin)
  *     description: Search courses created by the authenticated admin
  *     tags: [Courses]
  *     security:
@@ -281,7 +281,7 @@ export default router;
  *                   items:
  *                     $ref: '#/components/schemas/Course'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -292,7 +292,7 @@ export default router;
  * @swagger
  * /api/v1/course/openCourse:
  *   post:
- *     summary: Open course for user (Admin only)
+ *     summary: Open course for user (Admin/Superadmin)
  *     description: Grant a student access to a specific course
  *     tags: [Courses]
  *     security:
@@ -323,7 +323,7 @@ export default router;
  *             schema:
  *               $ref: '#/components/schemas/Success'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -340,7 +340,7 @@ export default router;
  * @swagger
  * /api/v1/course/add/note:
  *   post:
- *     summary: Add a note to course (Admin only)
+ *     summary: Add a note to course (Admin/Superadmin)
  *     description: Adds a note and sends notifications to enrolled students.
  *     tags: [Courses]
  *     security:
@@ -367,7 +367,7 @@ export default router;
  *       200:
  *         description: Note added and notifications sent
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *       404:
  *         description: Course not found
  */
@@ -376,7 +376,7 @@ export default router;
  * @swagger
  * /api/v1/course/add/section:
  *   post:
- *     summary: Add section to course (Admin only)
+ *     summary: Add section to course (Admin/Superadmin)
  *     description: Add a new section with videos and PDFs to an existing course
  *     tags: [Courses]
  *     security:
@@ -446,7 +446,7 @@ export default router;
  *                 data:
  *                   $ref: '#/components/schemas/Course'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -463,7 +463,7 @@ export default router;
  * @swagger
  * /api/v1/course/delete:
  *   delete:
- *     summary: Delete course (Admin only)
+ *     summary: Delete course (Admin/Superadmin)
  *     description: Delete a course and all its associated files
  *     tags: [Courses]
  *     security:
@@ -489,7 +489,7 @@ export default router;
  *             schema:
  *               $ref: '#/components/schemas/Success'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -506,7 +506,7 @@ export default router;
  * @swagger
  * /api/v1/course/delete/section:
  *   delete:
- *     summary: Delete section (Admin only)
+ *     summary: Delete section (Admin/Superadmin)
  *     description: Delete a section and all its associated files from a course
  *     tags: [Courses]
  *     security:
@@ -537,7 +537,7 @@ export default router;
  *             schema:
  *               $ref: '#/components/schemas/Success'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:
@@ -554,7 +554,7 @@ export default router;
  * @swagger
  * /api/v1/course/students-in-course:
  *   post:
- *     summary: Get students in course (Admin only)
+ *     summary: Get students in course (Admin/Superadmin)
  *     description: Get list of students enrolled in a specific course
  *     tags: [Courses]
  *     security:
@@ -588,7 +588,7 @@ export default router;
  *                   items:
  *                     $ref: '#/components/schemas/User'
  *       403:
- *         description: Access denied - Admin only
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  *         content:
  *           application/json:
  *             schema:

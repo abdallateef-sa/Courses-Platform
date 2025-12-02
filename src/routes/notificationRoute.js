@@ -14,7 +14,7 @@ export default router;
  * /api/v1/notifications:
  *   get:
  *     summary: Get user notifications
- *     description: Retrieve notifications for the authenticated user
+ *     description: Retrieve notifications for the authenticated user. Includes course-related notifications only for published courses the user is enrolled in, plus direct user-targeted notifications.
  *     tags: [Notifications]
  *     security:
  *       - bearerAuth: []
@@ -37,6 +37,9 @@ export default router;
  *                   courseName:
  *                     type: string
  *                     description: Related course name (if any)
+ *                   userId:
+ *                     type: string
+ *                     description: Target user ID (for direct notifications)
  *                   createdAt:
  *                     type: string
  *                     format: date-time
