@@ -1,16 +1,16 @@
 import express from "express";
 import {
-  register,
+  registerStudent,
+  registerAdmin,
+  verifyStudentRegistration,
   login,
   logout,
   forgotPassword,
   verifyResetCode,
   resetPassword,
-  allowStudentLogin,
-  getLoggedInStudents,
 } from "../controllers/authController.js";
 import { uploadImage } from "../middlewares/uploadImagesMiddleware.js";
-import { registerRules } from "../utils/validators/authValidator.js";
+import { registerRules } from "../utils/validators/authValidator.js"; // existing rules cover student fields
 import { loginLimiter } from "../middlewares/loginLimiter.js";
 import { isAuth } from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/roleMiddleware.js";
@@ -18,28 +18,32 @@ import { isAdmin } from "../middlewares/roleMiddleware.js";
 const router = express.Router();
 
 // Routes
+// Student registration (requires card image & academic fields)
 router.post(
-  "/register",
+  "/register/student",
   uploadImage.single("cardImage"),
   registerRules,
-  register
+  registerStudent
 );
+// Verify student registration OTP and create account
+router.post("/register/student/verify", verifyStudentRegistration);
+
+// Admin registration (basic fields only)
+router.post("/register/admin", registerAdmin);
 router.post("/login", loginLimiter, login);
 router.post("/logout", isAuth, logout);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password", resetPassword);
-router.post("/allow-student-login", isAuth, isAdmin, allowStudentLogin);
-router.get("/logged-in-students", isAuth, isAdmin, getLoggedInStudents);
 
 export default router;
 
 /**
  * @swagger
- * /api/v1/auth/register:
+ * /api/v1/auth/register/student:
  *   post:
- *     summary: Register new user
- *     description: Register a new user account with profile information and card image
+ *     summary: Register new student
+ *     description: Register a student account (requires academic data and card image)
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -55,36 +59,31 @@ export default router;
  *               - year
  *               - departmentType
  *               - university
+ *               - cardImage
  *             properties:
  *               fullName:
  *                 type: string
- *                 description: User's full name
  *                 example: "Ahmed Mohamed Ali"
  *               email:
  *                 type: string
  *                 format: email
- *                 description: User's email address
- *                 example: "ahmed@example.com"
+ *                 example: "ahmed@student.com"
  *               password:
  *                 type: string
  *                 format: password
- *                 description: User's password (minimum 6 characters)
  *                 example: "password123"
  *               phone:
  *                 type: string
- *                 description: User's phone number
  *                 example: "+201234567890"
  *               year:
- *                 type: string
- *                 description: Academic year
- *                 example: "Third Year"
+ *                 type: integer
+ *                 example: 3
  *               departmentType:
  *                 type: string
- *                 description: Department or major
- *                 example: "Computer Science"
+ *                 enum: [public, private]
+ *                 example: "public"
  *               university:
  *                 type: string
- *                 description: University name
  *                 example: "Cairo University"
  *               cardImage:
  *                 type: string
@@ -92,23 +91,83 @@ export default router;
  *                 description: Student ID card image
  *     responses:
  *       201:
- *         description: User registered successfully
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 token:
- *                   type: string
- *                   description: JWT authentication token
- *                 data:
- *                   $ref: '#/components/schemas/User'
+ *         description: Student registered successfully
  *       400:
- *         description: Validation error or user already exists
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *         description: Validation or business logic error
+ *       409:
+ *         description: Email or phone exists
+ *
+ * @swagger
+ * /api/v1/auth/register/student/verify:
+ *   post:
+ *     summary: Verify student email OTP
+ *     description: Verify the 6-digit OTP sent to the student's email and create the account.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - code
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "ahmed@student.com"
+ *               code:
+ *                 type: string
+ *                 description: 6-digit verification code
+ *                 example: "123456"
+ *     responses:
+ *       201:
+ *         description: Student verified and account created
+ *       400:
+ *         description: Invalid or expired code
+ *       404:
+ *         description: Pending registration not found
+ *
+ * @swagger
+ * /api/v1/auth/register/admin:
+ *   post:
+ *     summary: Register new admin
+ *     description: Register an admin account (basic info only)
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - fullName
+ *               - email
+ *               - password
+ *               - phone
+ *             properties:
+ *               fullName:
+ *                 type: string
+ *                 example: "Admin User"
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "admin@example.com"
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: "adminPass123"
+ *               phone:
+ *                 type: string
+ *                 example: "+201000000000"
+ *     responses:
+ *       201:
+ *         description: Admin registered successfully
+ *       400:
+ *         description: Validation or business logic error
+ *       409:
+ *         description: Email or phone exists
  */
 
 /**
@@ -116,7 +175,7 @@ export default router;
  * /api/v1/auth/login:
  *   post:
  *     summary: User login
- *     description: Authenticate user and return JWT token. Students are restricted to single session login.
+ *     description: Authenticate user and return JWT token. Students must verify email before login.
  *     tags: [Authentication]
  *     requestBody:
  *       required: true
@@ -296,81 +355,6 @@ export default router;
  *               $ref: '#/components/schemas/Success'
  *       400:
  *         description: Invalid request or user not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-
-/**
- * @swagger
- * /api/v1/auth/allow-student-login:
- *   post:
- *     summary: Allow student login (Admin only)
- *     description: Allow a student to login by clearing their login session status
- *     tags: [Admin Only]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required:
- *               - studentId
- *             properties:
- *               studentId:
- *                 type: string
- *                 description: Student's user ID
- *                 example: "64f8b2c1e4b0f4a2c8d1e5f6"
- *     responses:
- *       200:
- *         description: Student login allowed successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
- *       403:
- *         description: Access denied - Admin only
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- *       404:
- *         description: Student not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
- */
-
-/**
- * @swagger
- * /api/v1/auth/logged-in-students:
- *   get:
- *     summary: Get logged in students (Admin only)
- *     description: Retrieve list of currently logged in students
- *     tags: [Admin Only]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: List of logged in students
- *         content:
- *           application/json:
- *             schema:
- *               type: object
- *               properties:
- *                 results:
- *                   type: number
- *                   description: Number of logged in students
- *                 data:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/User'
- *       403:
- *         description: Access denied - Admin only
  *         content:
  *           application/json:
  *             schema:

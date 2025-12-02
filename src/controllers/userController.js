@@ -2,6 +2,10 @@ import User from "../models/userModel.js";
 import asyncHandler from "express-async-handler";
 import fs from "fs";
 import path from "path";
+import Course from "../models/courseModel.js";
+import Notification from "../models/notificationModel.js";
+import DeletionRequest from "../models/deletionRequestModel.js";
+import sendMail from "../utils/sendMail.js";
 
 // @desc search User by mail or phone
 export const searchUser = asyncHandler(async (req, res) => {
@@ -106,3 +110,90 @@ export const updateFCMToken = asyncHandler(async (req, res) => {
   });
 });
 
+// @desc Get my profile (authenticated user)
+export const getMyProfile = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("-password -__v");
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const userObj = user.toObject();
+  userObj.imageUrl = userObj.cardImage
+    ? imageBaseUrl + userObj.cardImage
+    : null;
+
+  res.status(200).json(userObj);
+});
+
+// Helpers for OTP
+const generateOtp = () =>
+  Math.floor(100000 + Math.random() * 900000).toString();
+
+// @desc Request account deletion (send OTP to email)
+export const requestDeleteAccount = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("email name fullName");
+  if (!user || !user.email) {
+    return res
+      .status(400)
+      .json({ message: "Valid email required to delete account" });
+  }
+
+  const otp = generateOtp();
+  // Remove previous requests and store a fresh one with TTL
+  await DeletionRequest.deleteMany({ userId: user._id });
+  await DeletionRequest.create({
+    userId: user._id,
+    email: user.email,
+    otp,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  });
+
+  // Send OTP email
+  await sendMail({
+    email: user.email,
+    subject: "Confirm Account Deletion",
+    text: `Your OTP to confirm deletion is: ${otp}`,
+    html: `<p>Your OTP to confirm deletion is: <strong>${otp}</strong></p>`,
+  });
+
+  res.status(200).json({ message: "OTP sent to email" });
+});
+
+// @desc Confirm account deletion (verify OTP and delete)
+export const confirmDeleteAccount = asyncHandler(async (req, res) => {
+  const { otp } = req.body;
+  if (!otp) return res.status(400).json({ message: "OTP is required" });
+
+  const user = await User.findById(req.user._id);
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  const pending = await DeletionRequest.findOne({ userId: user._id, otp });
+  if (
+    !pending ||
+    (pending.expiresAt && pending.expiresAt.getTime() < Date.now())
+  ) {
+    return res.status(400).json({ message: "Invalid or expired OTP" });
+  }
+
+  // Clean up user artifacts
+  if (user.cardImage) {
+    const imagePath = path.join("src", "uploads", "images", user.cardImage);
+    fs.unlink(imagePath, () => {});
+  }
+
+  // Remove user from any course lockedFor
+  await Course.updateMany(
+    { lockedFor: user._id },
+    { $pull: { lockedFor: user._id } }
+  );
+  // Delete notifications targeting this user
+  await Notification.deleteMany({ userId: user._id });
+
+  // Delete user
+  await user.deleteOne();
+  // Cleanup the deletion requests for this user
+  await DeletionRequest.deleteMany({ userId: req.user._id });
+
+  res.status(200).json({ message: "Account deleted successfully" });
+});

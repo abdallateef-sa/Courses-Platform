@@ -6,45 +6,164 @@ import User from "../models/userModel.js";
 import generateJWT from "../utils/generateJWT.js";
 import sendMail from "../utils/sendMail.js";
 import { rateLimitMap } from "../middlewares/loginLimiter.js";
+import PendingRegistration from "../models/pendingRegistrationModel.js";
 
-// @desc Register new student or admin
-export const register = asyncHandler(async (req, res) => {
-  const {
-    fullName,
-    email,
-    phone,
-    password,
-    year,
-    departmentType,
-    university,
-    role,
-  } = req.body;
+// @desc Register new student
+export const registerStudent = asyncHandler(async (req, res) => {
+  const { fullName, email, phone, password, year, departmentType, university } =
+    req.body;
 
-  const userRole = role || "student";
   const normalizedEmail = email.trim().toLowerCase();
 
-  if (userRole === "student" && !req.file) {
+  if (!req.file) {
     return res
       .status(400)
       .json({ message: "Card image is required for students" });
   }
 
+  // Check duplicates in DB
   const exists = await User.findOne({
     $or: [{ email: normalizedEmail }, { phone: phone.trim() }],
   });
   if (exists) {
-    if (req.file) {
-      const imagePath = path.join("src/uploads/images", req.file.filename);
-      fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
-    }
+    const imagePath = path.join("src/uploads/images", req.file.filename);
+    fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
     return res.status(409).json({ message: "Email or phone exists" });
   }
 
   if (!password || password.trim().length < 6) {
-    if (req.file) {
-      const imagePath = path.join("src/uploads/images", req.file.filename);
-      fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
+    const imagePath = path.join("src/uploads/images", req.file.filename);
+    fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
+    return res
+      .status(400)
+      .json({ message: "Password must be at least 6 characters" });
+  }
+
+  // Remove any existing pending with same email/phone and cleanup old image
+  const phoneTrimmed = phone.trim();
+  const oldPending = await PendingRegistration.findOne({
+    $or: [{ email: normalizedEmail }, { phone: phoneTrimmed }],
+  });
+  if (oldPending && oldPending.cardImage) {
+    const oldPath = path.join("src/uploads/images", oldPending.cardImage);
+    fs.existsSync(oldPath) && fs.unlinkSync(oldPath);
+    await PendingRegistration.deleteOne({ _id: oldPending._id });
+  }
+
+  const hashedPassword = await bcrypt.hash(password.trim(), 10);
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpHash = await bcrypt.hash(otp, 9);
+
+  const pendingData = {
+    fullName: fullName.trim(),
+    email: normalizedEmail,
+    phone: phoneTrimmed,
+    password: hashedPassword,
+    year,
+    departmentType,
+    university: university.trim(),
+    cardImage: req.file.filename,
+    role: "student",
+    codeHash: otpHash,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+  };
+
+  await PendingRegistration.create(pendingData);
+
+  const html = `
+    <h2 style="color:#4CAF50; text-align:center;">Email Verification Code</h2>
+    <p>Use this code to complete your registration. Valid for 10 minutes:</p>
+    <h3 style="text-align:center; color:#333;">${otp}</h3>
+    <p>Don't share this code with anyone.</p>
+  `;
+
+  try {
+    await sendMail({ email: normalizedEmail, subject: "Your OTP Code", html });
+    return res.status(200).json({
+      message: "OTP sent to email. Please verify to complete registration.",
+    });
+  } catch (err) {
+    const imagePath = path.join("src/uploads/images", req.file.filename);
+    fs.existsSync(imagePath) && fs.unlinkSync(imagePath);
+    await PendingRegistration.deleteMany({ email: normalizedEmail });
+    return res
+      .status(500)
+      .json({ message: "Failed to send OTP. Please try again." });
+  }
+});
+
+// @desc Verify student OTP and create account
+export const verifyStudentRegistration = asyncHandler(async (req, res) => {
+  const { email, code } = req.body;
+  if (!email || !code) {
+    return res.status(400).json({ message: "Email and code are required" });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+  const pending = await PendingRegistration.findOne({ email: normalizedEmail });
+  if (!pending)
+    return res
+      .status(400)
+      .json({ message: "No pending registration for this email" });
+
+  if (pending.expiresAt.getTime() <= Date.now()) {
+    if (pending.cardImage) {
+      const img = path.join("src/uploads/images", pending.cardImage);
+      fs.existsSync(img) && fs.unlinkSync(img);
     }
+    await PendingRegistration.deleteOne({ _id: pending._id });
+    return res
+      .status(400)
+      .json({ message: "Verification code expired. Please register again." });
+  }
+
+  const match = await bcrypt.compare(code, pending.codeHash);
+  if (!match)
+    return res.status(400).json({ message: "Invalid verification code" });
+
+  const newUser = await User.create({
+    fullName: pending.fullName,
+    email: pending.email,
+    phone: pending.phone,
+    password: pending.password,
+    year: pending.year,
+    departmentType: pending.departmentType,
+    university: pending.university,
+    cardImage: pending.cardImage,
+    role: "student",
+    emailVerified: true,
+  });
+
+  await PendingRegistration.deleteOne({ _id: pending._id });
+
+  const token = generateJWT({ id: newUser._id, role: newUser.role });
+  return res.status(201).json({
+    token,
+    user: {
+      id: newUser._id,
+      fullName: newUser.fullName,
+      email: newUser.email,
+      phone: newUser.phone,
+      role: newUser.role,
+    },
+  });
+});
+
+// @desc Register new admin
+export const registerAdmin = asyncHandler(async (req, res) => {
+  const { fullName, email, phone, password, year, departmentType, university } =
+    req.body;
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const exists = await User.findOne({
+    $or: [{ email: normalizedEmail }, { phone: phone.trim() }],
+  });
+  if (exists) {
+    return res.status(409).json({ message: "Email or phone exists" });
+  }
+
+  if (!password || password.trim().length < 6) {
     return res
       .status(400)
       .json({ message: "Password must be at least 6 characters" });
@@ -57,11 +176,11 @@ export const register = asyncHandler(async (req, res) => {
     email: normalizedEmail,
     phone: phone.trim(),
     password: hashedPassword,
-    year,
+    year, // retain fields if sent (minimal change philosophy)
     departmentType,
-    university: university.trim(),
+    university: university?.trim(),
     cardImage: req.file?.filename || null,
-    role: userRole,
+    role: "admin",
   });
 
   const token = generateJWT({ id: newUser._id, role: newUser.role });
@@ -96,22 +215,15 @@ export const login = asyncHandler(async (req, res) => {
 
   if (!user) return res.status(404).json({ message: "User not found" });
 
+  // Require email verification for students
+  if (user.role === "student" && !user.emailVerified) {
+    return res.status(403).json({ message: "Please verify your email first" });
+  }
+
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Incorrect password" });
 
-  // Check if student is already logged in (admin can login multiple times)
-  if (user.role === "student" && user.isLoggedIn) {
-    return res.status(403).json({
-      message:
-        "Student is already logged in from another device. Please logout first or contact admin.",
-    });
-  }
-
-  // Mark student as logged in (only for students)
-  if (user.role === "student") {
-    user.isLoggedIn = true;
-    await user.save();
-  }
+  // Single-session enforcement removed: students can login normally on multiple devices
 
   rateLimitMap.delete(rawInput);
 
@@ -129,11 +241,6 @@ export const login = asyncHandler(async (req, res) => {
 
 // @desc Logout
 export const logout = asyncHandler(async (req, res) => {
-  // Mark student as logged out (only for students)
-  if (req.user && req.user.role === "student") {
-    await User.findByIdAndUpdate(req.user._id, { isLoggedIn: false });
-  }
-
   res.clearCookie("token"); // if using cookies
   res.status(200).json({ message: "Logged out successfully" });
 });
@@ -241,54 +348,3 @@ export const resetPassword = asyncHandler(async (req, res) => {
   res.json({ message: "Password reset successfully" });
 });
 
-// @desc Allow student to login (Admin only)
-export const allowStudentLogin = asyncHandler(async (req, res) => {
-  const { emailOrPhone } = req.body;
-
-  if (!emailOrPhone) {
-    return res.status(400).json({ message: "Email or phone is required" });
-  }
-
-  const rawInput =
-    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
-  const normalizedInput =
-    typeof rawInput === "string" && rawInput.includes("@")
-      ? rawInput.toLowerCase()
-      : rawInput;
-
-  const student = await User.findOne({
-    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
-    role: "student",
-  });
-
-  if (!student) {
-    return res.status(404).json({ message: "Student not found" });
-  }
-
-  // Allow student to login by setting isLoggedIn to false
-  student.isLoggedIn = false;
-  await student.save();
-
-  res.status(200).json({
-    message: `Login access granted for student: ${student.fullName}`,
-    student: {
-      id: student._id,
-      fullName: student.fullName,
-      email: student.email,
-      phone: student.phone,
-    },
-  });
-});
-
-// @desc Get all logged in students (Admin only)
-export const getLoggedInStudents = asyncHandler(async (req, res) => {
-  const loggedInStudents = await User.find({
-    role: "student",
-    isLoggedIn: true,
-  }).select("fullName email phone createdAt");
-
-  res.status(200).json({
-    count: loggedInStudents.length,
-    students: loggedInStudents,
-  });
-});

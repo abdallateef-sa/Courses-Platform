@@ -11,7 +11,7 @@ export default router;
 
 /**
  * @swagger
- * /api/v1/notification:
+ * /api/v1/notifications:
  *   get:
  *     summary: Get user notifications
  *     description: Retrieve notifications for the authenticated user
@@ -24,32 +24,26 @@ export default router;
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 results:
- *                   type: number
- *                   description: Number of notifications
- *                 data:
- *                   type: array
- *                   items:
- *                     type: object
- *                     properties:
- *                       _id:
- *                         type: string
- *                         description: Notification ID
- *                       message:
- *                         type: string
- *                         description: Notification message
- *                       type:
- *                         type: string
- *                         description: Notification type
- *                       createdAt:
- *                         type: string
- *                         format: date-time
- *                         description: Creation date
- *                       read:
- *                         type: boolean
- *                         description: Whether notification is read
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   _id:
+ *                     type: string
+ *                     description: Notification ID
+ *                   message:
+ *                     type: string
+ *                     description: Notification message
+ *                   courseName:
+ *                     type: string
+ *                     description: Related course name (if any)
+ *                   createdAt:
+ *                     type: string
+ *                     format: date-time
+ *                     description: Creation date
+ *                   read:
+ *                     type: boolean
+ *                     description: Whether notification is read
  *       401:
  *         description: Unauthorized - Invalid token
  *         content:

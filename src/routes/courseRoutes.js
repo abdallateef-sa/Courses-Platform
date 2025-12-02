@@ -3,11 +3,15 @@ import {
   createCourse,
   updateCourse,
   listCourses,
+  listCoursesForStudent,
   searchCoursesByAdmin,
   getCourse,
+  getCourseAdmin,
   openCourseForUser,
   listUserCourses,
-  addComment,
+  setCourseStatus,
+  addCourseNote,
+  deleteCourseNote,
   addSection,
   deleteCourse,
   deleteSection,
@@ -22,7 +26,6 @@ import { uploadVideosAndPdfs } from "../middlewares/uploadVideoMiddleware.js";
 const router = express.Router();
 
 // Admin Routes
-router.get("/getAllCourses", listCourses);
 router.post(
   "/create",
   isAuth,
@@ -37,9 +40,13 @@ router.put(
   uploadImage.single("image"),
   updateCourse
 );
+router.get("/getAllCourses/Admin", isAuth, isAdmin, listCourses);
+router.get("/Course/Admin", isAuth, isAdmin, getCourseAdmin);
 router.get("/search/AdminID", isAuth, isAdmin, searchCoursesByAdmin);
 router.post("/openCourse", isAuth, isAdmin, openCourseForUser);
-router.post("/add/comments", isAuth, isAdmin, addComment);
+router.post("/set-status", isAuth, isAdmin, setCourseStatus);
+router.post("/add/note", isAuth, isAdmin, addCourseNote);
+router.delete("/delete/note", isAuth, isAdmin, deleteCourseNote);
 router.post(
   "/add/section",
   isAuth,
@@ -55,6 +62,7 @@ router.delete("/delete/section", isAuth, isAdmin, deleteSection);
 router.post("/students-in-course", isAuth, isAdmin, getStudentsInCourse);
 
 // Student Routes
+router.get("/getAllCourses", listCoursesForStudent);
 router.get("/me", isAuth, listUserCourses);
 router.get("/Course", getCourse);
 
@@ -64,8 +72,8 @@ export default router;
  * @swagger
  * /api/v1/course/getAllCourses:
  *   get:
- *     summary: Get all courses
- *     description: Retrieve list of all available courses (public access)
+ *     summary: Get all published courses (Student)
+ *     description: Retrieve list of published courses only (hidden when unpublished).
  *     tags: [Courses]
  *     responses:
  *       200:
@@ -82,6 +90,38 @@ export default router;
  *                   type: array
  *                   items:
  *                     $ref: '#/components/schemas/Course'
+ */
+
+/**
+ * @swagger
+ * /api/v1/course/getAllCourses/Admin:
+ *   get:
+ *     summary: Get all courses (Admin only)
+ *     description: Admin can view all courses regardless of published status.
+ *     tags: [Courses]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of courses retrieved successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 results:
+ *                   type: number
+ *                   description: Number of courses
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/Course'
+ *       403:
+ *         description: Access denied - Admin only
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
  */
 
 /**
@@ -298,10 +338,10 @@ export default router;
 
 /**
  * @swagger
- * /api/v1/course/add/comments:
+ * /api/v1/course/add/note:
  *   post:
- *     summary: Add comment to course (Admin only)
- *     description: Add a comment or note to a course
+ *     summary: Add a note to course (Admin only)
+ *     description: Adds a note and sends notifications to enrolled students.
  *     tags: [Courses]
  *     security:
  *       - bearerAuth: []
@@ -312,30 +352,24 @@ export default router;
  *           schema:
  *             type: object
  *             required:
- *               - courseId
- *               - comment
+ *               - courseName
+ *               - note
  *             properties:
- *               courseId:
+ *               courseName:
  *                 type: string
- *                 description: Course ID
- *                 example: "64f8b2c1e4b0f4a2c8d1e5f6"
- *               comment:
+ *                 description: Course name
+ *                 example: "Advanced Programming Course"
+ *               note:
  *                 type: string
- *                 description: Comment text
- *                 example: "Great progress in this course"
+ *                 description: Note text to add and notify students with
+ *                 example: "New assignment uploaded in Unit 2"
  *     responses:
  *       200:
- *         description: Comment added successfully
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Success'
+ *         description: Note added and notifications sent
  *       403:
  *         description: Access denied - Admin only
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/Error'
+ *       404:
+ *         description: Course not found
  */
 
 /**
@@ -365,6 +399,10 @@ export default router;
  *                 type: string
  *                 description: Section title
  *                 example: "Lesson 1 - Introduction"
+ *               isFree:
+ *                 type: boolean
+ *                 description: Whether the section is free to access
+ *                 example: false
  *               videos:
  *                 type: array
  *                 items:
@@ -389,6 +427,14 @@ export default router;
  *                 type: string
  *                 description: Comma-separated boolean values for PDF downloadability
  *                 example: "true,false"
+ *               pdfFolders:
+ *                 type: string
+ *                 description: JSON array of folder names mapped to each PDF (e.g. ["Week1","Week1"]). If provided, must match pdfs length.
+ *                 example: "[\"Week1\",\"Week1\"]"
+ *               pdfFolder:
+ *                 type: string
+ *                 description: Single folder name applied to all uploaded PDFs (used when not sending pdfFolders array)
+ *                 example: "Week1"
  *     responses:
  *       201:
  *         description: Section added successfully
@@ -591,8 +637,8 @@ export default router;
  * @swagger
  * /api/v1/course/Course:
  *   get:
- *     summary: Get specific course
- *     description: Get details of a specific course by ID (query parameter)
+ *     summary: Get specific course (Published only)
+ *     description: Get course details by name. Only published courses are returned for public/student access.
  *     tags: [Courses]
  *     parameters:
  *       - in: query
@@ -618,4 +664,29 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ */
+/**
+ * @swagger
+ * /api/v1/course/Course/Admin:
+ *   get:
+ *     summary: Get specific course (Admin only)
+ *     description: Admin can view course details regardless of published status.
+ *     tags: [Courses]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: courseName
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Course name
+ *         example: "Advanced Programming Course"
+ *     responses:
+ *       200:
+ *         description: Course details retrieved successfully
+ *       403:
+ *         description: Access denied - Admin only
+ *       404:
+ *         description: Course not found
  */

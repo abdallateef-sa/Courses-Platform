@@ -6,6 +6,9 @@ import {
   deleteUser,
   getAllStudents,
   updateFCMToken,
+  getMyProfile,
+  requestDeleteAccount,
+  confirmDeleteAccount,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -17,6 +20,9 @@ router.get("/students", isAuth, isAdmin, getAllStudents);
 
 // Student Routes
 router.put("/fcm-token", isAuth, updateFCMToken);
+router.get("/me", isAuth, getMyProfile);
+router.post("/delete-account/request", isAuth, requestDeleteAccount);
+router.post("/delete-account/confirm", isAuth, confirmDeleteAccount);
 
 export default router;
 

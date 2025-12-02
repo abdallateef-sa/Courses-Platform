@@ -4,6 +4,7 @@ const pdfSchema = new mongoose.Schema({
   label: String,
   filename: String,
   downloadable: { type: Boolean, default: false },
+  folder: { type: String },
 });
 
 const videoSchema = new mongoose.Schema({
@@ -13,6 +14,7 @@ const videoSchema = new mongoose.Schema({
 
 const sectionSchema = new mongoose.Schema({
   title: { type: String, required: true },
+  isFree: { type: Boolean, default: false },
   videos: [videoSchema],
   pdfs: [pdfSchema],
 });
@@ -22,10 +24,13 @@ const courseSchema = new mongoose.Schema(
     name: { type: String, required: true, unique: true },
     teacher: { type: String, required: true },
     image: { type: String },
+    overview: { type: String },
+    published: { type: Boolean, default: false },
     sections: [sectionSchema],
     followGroup: { type: String },
     whatsappNumber: { type: String }, // رقم الواتس للطلب
     comments: [{ message: String, createdAt: Date }],
+    notes: [{ text: String, createdAt: Date }],
     lockedFor: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
