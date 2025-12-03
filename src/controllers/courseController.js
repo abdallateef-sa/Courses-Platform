@@ -432,6 +432,8 @@ export const addSection = asyncHandler(async (req, res) => {
         _id: section._id,
         title: section.title,
         isFree: !!section.isFree,
+        videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+        pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
         videos: section.videos.map((video) => ({
           _id: video._id,
           label: video.label,
@@ -498,6 +500,8 @@ export const listCourses = asyncHandler(async (req, res) => {
       _id: section._id,
       title: section.title,
       isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
         _id: video._id,
         label: video.label,
@@ -565,6 +569,8 @@ export const listCoursesForStudent = asyncHandler(async (req, res) => {
       _id: section._id,
       title: section.title,
       isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
         _id: video._id,
         label: video.label,
@@ -651,6 +657,8 @@ export const getCourse = asyncHandler(async (req, res) => {
       _id: section._id,
       title: section.title,
       isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
         _id: video._id,
         label: video.label,
@@ -730,6 +738,8 @@ export const getCourseAdmin = asyncHandler(async (req, res) => {
       _id: section._id,
       title: section.title,
       isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
         _id: video._id,
         label: video.label,
@@ -943,6 +953,11 @@ export const listUserCourses = asyncHandler(async (req, res) => {
     whatsappNumber: course.whatsappNumber,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
+    notes: (course.notes || []).map((n) => ({
+      _id: n._id,
+      text: n.text,
+      createdAt: n.createdAt,
+    })),
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
     sectionsCount: course.sections.length,
@@ -950,6 +965,8 @@ export const listUserCourses = asyncHandler(async (req, res) => {
       _id: section._id,
       title: section.title,
       isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
         _id: video._id,
         label: video.label,
