@@ -2,11 +2,13 @@ import express from "express";
 import {
   registerStudent,
   verifyStudentRegistration,
+  resendStudentVerificationCode,
   login,
   logout,
   forgotPassword,
   verifyResetCode,
   resetPassword,
+  resendResetCode,
   createAdminBySuper,
   updateAdminStatus,
 } from "../controllers/authController.js";
@@ -28,6 +30,8 @@ router.post(
 );
 // Verify student registration OTP and create account
 router.post("/register/student/verify", verifyStudentRegistration);
+// Resend student verification OTP
+router.post("/register/student/resend", resendStudentVerificationCode);
 
 // Admin registration disabled for public; use superadmin endpoints below
 // Superadmin endpoints
@@ -36,6 +40,7 @@ router.post("/super/admin/update-status", isAuth, updateAdminStatus);
 router.post("/login", loginLimiter, login);
 router.post("/logout", isAuth, logout);
 router.post("/forgot-password", forgotPassword);
+router.post("/forgot-password/resend", resendResetCode);
 router.post("/verify-reset-code", verifyResetCode);
 router.post("/reset-password", resetPassword);
 
@@ -43,6 +48,31 @@ export default router;
 
 /**
  * @swagger
+ * /api/v1/auth/register/student/resend:
+ *   post:
+ *     summary: Resend student email OTP
+ *     description: Resend the 6-digit OTP to complete student registration. Accepts email or phone.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - emailOrPhone
+ *             properties:
+ *               emailOrPhone:
+ *                 type: string
+ *                 example: "ahmed@student.com"
+ *     responses:
+ *       200:
+ *         description: OTP resent to email
+ *       404:
+ *         description: Pending registration not found
+ *       500:
+ *         description: Failed to resend OTP
+ *
  * /api/v1/auth/super/admin/create:
  *   post:
  *     summary: Superadmin - Create admin
@@ -356,6 +386,34 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/v1/auth/forgot-password/resend:
+ *   post:
+ *     summary: Resend password reset code
+ *     description: Regenerates and resends the password reset code to the user's email. Throttled to once per 60 seconds.
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - emailOrPhone
+ *             properties:
+ *               emailOrPhone:
+ *                 type: string
+ *                 description: Email or phone associated with the account
+ *     responses:
+ *       200:
+ *         description: Reset code resent successfully
+ *       404:
+ *         description: User not found
+ *       429:
+ *         description: Too many requests - Please wait before requesting another code
  */
 
 /**

@@ -1,6 +1,6 @@
 import express from "express";
 import { isAuth } from "../middlewares/authMiddleware.js";
-import { isAdmin } from "../middlewares/roleMiddleware.js";
+import { isAdmin, isSuperadmin } from "../middlewares/roleMiddleware.js";
 import {
   searchUser,
   deleteUser,
@@ -9,6 +9,8 @@ import {
   getMyProfile,
   requestDeleteAccount,
   confirmDeleteAccount,
+  getAllAdmins,
+  resendDeleteAccountOtp,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -17,12 +19,15 @@ const router = express.Router();
 router.get("/search", isAuth, isAdmin, searchUser);
 router.delete("/delete", isAuth, isAdmin, deleteUser);
 router.get("/students", isAuth, isAdmin, getAllStudents);
+// Superadmin Routes
+router.get("/admins", isAuth, isSuperadmin, getAllAdmins);
 
 // Student Routes
 router.put("/fcm-token", isAuth, updateFCMToken);
 router.get("/me", isAuth, getMyProfile);
 router.post("/delete-account/request", isAuth, requestDeleteAccount);
 router.post("/delete-account/confirm", isAuth, confirmDeleteAccount);
+router.post("/delete-account/resend", isAuth, resendDeleteAccountOtp);
 
 export default router;
 
@@ -40,6 +45,42 @@ export default router;
  *         description: Profile retrieved successfully
  *       401:
  *         description: Unauthorized - Invalid token
+ */
+
+/**
+ * @swagger
+ * /api/v1/user/delete-account/resend:
+ *   post:
+ *     summary: Resend deletion OTP
+ *     description: Regenerates and resends the deletion OTP to the authenticated user's email. Throttled to once per 60 seconds.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: OTP resent to email
+ *       404:
+ *         description: No pending deletion request found
+ *       429:
+ *         description: Too many requests - Please wait before requesting another code
+ */
+
+/**
+ * @swagger
+ * /api/v1/user/admins:
+ *   get:
+ *     summary: Get all admins (Superadmin only)
+ *     description: Superadmin can retrieve all admins with full profile fields (excluding password).
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Admins list retrieved successfully
+ *       403:
+ *         description: Access denied - Requires superadmin
+ *       404:
+ *         description: No admins found
  */
 
 /**

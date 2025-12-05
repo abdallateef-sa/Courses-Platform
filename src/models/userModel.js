@@ -43,6 +43,7 @@ const userSchema = new mongoose.Schema(
     passwordResetCode: String,
     passwordResetExpires: Date,
     passwordResetVerified: Boolean,
+    passwordResetLastResendAt: Date,
     emailVerified: { type: Boolean, default: false },
     emailVerificationCode: String,
     emailVerificationExpires: Date,

@@ -79,6 +79,27 @@ export const getAllStudents = asyncHandler(async (req, res) => {
     .json({ count: formattedStudents.length, students: formattedStudents });
 });
 
+// @desc Get All Admins (Superadmin only)
+export const getAllAdmins = asyncHandler(async (req, res) => {
+  const admins = await User.find({ role: "admin" }).select("-password -__v");
+
+  if (!admins || admins.length === 0) {
+    return res.status(404).json({ message: "No admins found" });
+  }
+
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+
+  const formatted = admins.map((admin) => {
+    const obj = admin.toObject();
+    if (obj.cardImage) obj.cardImage = imageBaseUrl + obj.cardImage;
+    return obj;
+  });
+
+  res.status(200).json({ count: formatted.length, admins: formatted });
+});
+
 // @desc Update FCM Token for push notifications
 export const updateFCMToken = asyncHandler(async (req, res) => {
   const { fcmToken } = req.body;
@@ -196,4 +217,46 @@ export const confirmDeleteAccount = asyncHandler(async (req, res) => {
   await DeletionRequest.deleteMany({ userId: req.user._id });
 
   res.status(200).json({ message: "Account deleted successfully" });
+});
+
+// @desc Resend OTP for account deletion
+export const resendDeleteAccountOtp = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.user._id).select("email fullName");
+  if (!user || !user.email) {
+    return res
+      .status(400)
+      .json({ message: "Valid email required to resend deletion OTP" });
+  }
+
+  const pending = await DeletionRequest.findOne({ userId: user._id });
+  if (!pending) {
+    return res
+      .status(404)
+      .json({ message: "No pending deletion request found" });
+  }
+
+  const now = Date.now();
+  if (
+    pending.lastResendAt &&
+    now - new Date(pending.lastResendAt).getTime() < 60 * 1000
+  ) {
+    return res
+      .status(429)
+      .json({ message: "Please wait before requesting another code" });
+  }
+
+  const otp = generateOtp();
+  pending.otp = otp;
+  pending.expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  pending.lastResendAt = new Date();
+  await pending.save();
+
+  await sendMail({
+    email: user.email,
+    subject: "Confirm Account Deletion (Resend)",
+    text: `Your OTP to confirm deletion is: ${otp}`,
+    html: `<p>Your OTP to confirm deletion is: <strong>${otp}</strong></p>`,
+  });
+
+  res.status(200).json({ message: "OTP resent to email" });
 });

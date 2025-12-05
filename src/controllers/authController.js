@@ -70,6 +70,15 @@ export const registerStudent = asyncHandler(async (req, res) => {
 
   await PendingRegistration.create(pendingData);
 
+  // Store pending identity in a short-lived cookie to allow resend without body
+  try {
+    res.cookie("pendingEmail", normalizedEmail, {
+      maxAge: 10 * 60 * 1000, // 10 minutes
+      httpOnly: true,
+      sameSite: "lax",
+    });
+  } catch (_) {}
+
   const html = `
     <h2 style="color:#4CAF50; text-align:center;">Email Verification Code</h2>
     <p>Use this code to complete your registration. Valid for 10 minutes:</p>
@@ -147,6 +156,90 @@ export const verifyStudentRegistration = asyncHandler(async (req, res) => {
       role: newUser.role,
     },
   });
+});
+
+// @desc Resend student verification OTP
+export const resendStudentVerificationCode = asyncHandler(async (req, res) => {
+  const emailOrPhone = req.body && req.body.emailOrPhone;
+
+  // Try to get identifier from body; else fall back to cookie
+  let rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  if (!rawInput) {
+    const cookieHeader = req.headers?.cookie || "";
+    // Simple cookie parse to avoid dependency on cookie-parser
+    const cookies = Object.fromEntries(
+      cookieHeader
+        .split(";")
+        .map((kv) => kv.trim())
+        .filter(Boolean)
+        .map((kv) => {
+          const idx = kv.indexOf("=");
+          if (idx === -1) return [kv, ""];
+          const k = kv.slice(0, idx);
+          const v = decodeURIComponent(kv.slice(idx + 1));
+          return [k, v];
+        })
+    );
+    rawInput = cookies.pendingEmail;
+  }
+
+  if (!rawInput) {
+    return res.status(400).json({
+      message: "No identifier provided or stored. Please send email or phone.",
+    });
+  }
+
+  const isEmail = typeof rawInput === "string" && rawInput.includes("@");
+  const normalizedEmail = isEmail ? rawInput.toLowerCase() : undefined;
+  const normalizedPhone = !isEmail ? rawInput : undefined;
+
+  const pending = await PendingRegistration.findOne(
+    isEmail ? { email: normalizedEmail } : { phone: normalizedPhone }
+  );
+
+  if (!pending) {
+    return res.status(404).json({ message: "No pending registration found" });
+  }
+
+  // Basic resend throttling: limit to once per 60 seconds to protect performance
+  const now = Date.now();
+  if (
+    pending.lastResendAt &&
+    now - new Date(pending.lastResendAt).getTime() < 60 * 1000
+  ) {
+    return res
+      .status(429)
+      .json({ message: "Please wait before requesting another code" });
+  }
+
+  // Generate new OTP and update TTL
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  const otpHash = await bcrypt.hash(otp, 9);
+  pending.codeHash = otpHash;
+  pending.expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  pending.lastResendAt = new Date();
+  await pending.save();
+
+  const html = `
+    <h2 style="color:#4CAF50; text-align:center;">Email Verification Code</h2>
+    <p>Use this code to complete your registration. Valid for 10 minutes:</p>
+    <h3 style="text-align:center; color:#333;">${otp}</h3>
+    <p>Don't share this code with anyone.</p>
+  `;
+
+  try {
+    await sendMail({
+      email: pending.email,
+      subject: "Your OTP Code (Resend)",
+      html,
+    });
+    return res.status(200).json({ message: "OTP resent to email" });
+  } catch (err) {
+    return res
+      .status(500)
+      .json({ message: "Failed to resend OTP. Please try again." });
+  }
 });
 
 // @desc Register new admin
@@ -427,4 +520,61 @@ export const resetPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   res.json({ message: "Password reset successfully" });
+});
+
+// @desc Resend Forgot Password Code
+export const resendResetCode = asyncHandler(async (req, res) => {
+  const { emailOrPhone } = req.body || {};
+  if (!emailOrPhone)
+    return res.status(400).json({ message: "Please provide email or phone" });
+
+  const rawInput =
+    typeof emailOrPhone === "string" ? emailOrPhone.trim() : emailOrPhone;
+  const normalizedInput =
+    typeof rawInput === "string" && rawInput.includes("@")
+      ? rawInput.toLowerCase()
+      : rawInput;
+
+  const user = await User.findOne({
+    $or: [{ email: normalizedInput }, { phone: normalizedInput }],
+  });
+  if (!user) return res.status(404).json({ message: "User not found" });
+
+  const now = Date.now();
+  if (
+    user.passwordResetLastResendAt &&
+    now - new Date(user.passwordResetLastResendAt).getTime() < 60 * 1000
+  ) {
+    return res
+      .status(429)
+      .json({ message: "Please wait before requesting another code" });
+  }
+
+  const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+  const hashedResetCode = await bcrypt.hash(resetCode, 9);
+
+  user.passwordResetCode = hashedResetCode;
+  user.passwordResetExpires = Date.now() + 10 * 60 * 1000;
+  user.passwordResetVerified = false;
+  user.passwordResetLastResendAt = new Date();
+  await user.save();
+
+  const html = `
+    <h2 style="color: #4CAF50; text-align: center;">Password Reset Code</h2>
+    <p>Use this code to reset your password. Code is valid for 10 minutes:</p>
+    <h3 style="text-align: center; color: #333;">${resetCode}</h3>
+    <p>Don't share this code with anyone.</p>
+  `;
+
+  try {
+    await sendMail({
+      email: user.email,
+      subject: "Password Reset Code (Resend)",
+      html,
+    });
+    res.json({ message: "Reset code resent to email" });
+  } catch (error) {
+    // keep current state; client can retry later
+    res.status(500).json({ message: "Failed to resend reset code" });
+  }
 });

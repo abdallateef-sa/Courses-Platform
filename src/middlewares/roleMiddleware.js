@@ -10,3 +10,11 @@ export const isAdmin = (req, res, next) => {
   }
   next();
 };
+
+export const isSuperadmin = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== "superadmin") {
+    return res.status(403).json({ message: "Only superadmin is authorized" });
+  }
+  next();
+};

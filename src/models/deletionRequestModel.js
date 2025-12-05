@@ -11,6 +11,7 @@ const deletionRequestSchema = new mongoose.Schema(
     email: { type: String, required: true, lowercase: true },
     otp: { type: String, required: true },
     expiresAt: { type: Date, required: true },
+    lastResendAt: { type: Date },
   },
   { timestamps: true }
 );
