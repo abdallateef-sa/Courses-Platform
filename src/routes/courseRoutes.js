@@ -16,6 +16,7 @@ import {
   deleteCourse,
   deleteSection,
   getStudentsInCourse,
+  removeStudentFromCourse,
 } from "../controllers/courseController.js";
 import { isAuth } from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/roleMiddleware.js";
@@ -44,6 +45,7 @@ router.get("/getAllCourses/Admin", isAuth, isAdmin, listCourses);
 router.get("/Course/Admin", isAuth, isAdmin, getCourseAdmin);
 router.get("/search/AdminID", isAuth, isAdmin, searchCoursesByAdmin);
 router.post("/openCourse", isAuth, isAdmin, openCourseForUser);
+router.delete("/remove-student", isAuth, isAdmin, removeStudentFromCourse);
 router.post("/set-status", isAuth, isAdmin, setCourseStatus);
 router.post("/add/note", isAuth, isAdmin, addCourseNote);
 router.delete("/delete/note", isAuth, isAdmin, deleteCourseNote);
@@ -334,6 +336,42 @@ export default router;
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/Error'
+ */
+
+/**
+ * @swagger
+ * /api/v1/course/remove-student:
+ *   delete:
+ *     summary: Remove a student from a course (Admin/Superadmin)
+ *     description: Unenroll a student from a specific course by email or phone.
+ *     tags: [Courses]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - courseName
+ *               - emailOrPhone
+ *             properties:
+ *               courseName:
+ *                 type: string
+ *                 description: Course name
+ *                 example: "Advanced Programming Course"
+ *               emailOrPhone:
+ *                 type: string
+ *                 description: Student email or phone
+ *                 example: "+201234567890"
+ *     responses:
+ *       200:
+ *         description: Student removed from course
+ *       403:
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
+ *       404:
+ *         description: Course or student not found, or student not enrolled
  */
 
 /**

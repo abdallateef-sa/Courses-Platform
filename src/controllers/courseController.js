@@ -960,6 +960,55 @@ export const openCourseForUser = asyncHandler(async (req, res) => {
   res.json({ message: "Course opened for user" });
 });
 
+// @desc Remove a student from a course (admin only)
+export const removeStudentFromCourse = asyncHandler(async (req, res) => {
+  const { courseName, emailOrPhone } = req.body;
+
+  if (!courseName || !emailOrPhone) {
+    return res
+      .status(400)
+      .json({ message: "courseName and emailOrPhone are required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) {
+    return res.status(404).json({ message: "Course not found" });
+  }
+
+  // Only creator admin, admin role, or superadmin can modify enrollment
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
+  ) {
+    return res
+      .status(403)
+      .json({ message: "Not authorized to modify course enrollment" });
+  }
+
+  const user = await User.findOne({
+    $or: [{ email: emailOrPhone }, { phone: emailOrPhone }],
+    role: "student",
+  });
+  if (!user) {
+    return res.status(404).json({ message: "Student not found" });
+  }
+
+  const before = course.lockedFor.length;
+  course.lockedFor = course.lockedFor.filter(
+    (uid) => uid.toString() !== user._id.toString()
+  );
+  const after = course.lockedFor.length;
+
+  if (before === after) {
+    return res.status(404).json({ message: "Student not enrolled in course" });
+  }
+
+  await course.save();
+
+  return res.status(200).json({ message: "Student removed from course" });
+});
+
 // @desc List courses opened for current student
 export const listUserCourses = asyncHandler(async (req, res) => {
   const courses = await Course.find({
