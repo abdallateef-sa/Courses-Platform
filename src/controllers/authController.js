@@ -208,9 +208,12 @@ export const resendStudentVerificationCode = asyncHandler(async (req, res) => {
     pending.lastResendAt &&
     now - new Date(pending.lastResendAt).getTime() < 60 * 1000
   ) {
-    return res
-      .status(429)
-      .json({ message: "Please wait before requesting another code" });
+    const elapsed = now - new Date(pending.lastResendAt).getTime();
+    const remainingSeconds = Math.ceil((60 * 1000 - elapsed) / 1000);
+    return res.status(429).json({
+      message: "Please wait before requesting another code",
+      retryAfterSeconds: remainingSeconds,
+    });
   }
 
   // Generate new OTP and update TTL
@@ -545,9 +548,12 @@ export const resendResetCode = asyncHandler(async (req, res) => {
     user.passwordResetLastResendAt &&
     now - new Date(user.passwordResetLastResendAt).getTime() < 60 * 1000
   ) {
-    return res
-      .status(429)
-      .json({ message: "Please wait before requesting another code" });
+    const elapsed = now - new Date(user.passwordResetLastResendAt).getTime();
+    const remainingSeconds = Math.ceil((60 * 1000 - elapsed) / 1000);
+    return res.status(429).json({
+      message: "Please wait before requesting another code",
+      retryAfterSeconds: remainingSeconds,
+    });
   }
 
   const resetCode = Math.floor(100000 + Math.random() * 900000).toString();

@@ -17,6 +17,7 @@ const pendingRegistrationSchema = new mongoose.Schema(
     role: { type: String, enum: ["student"], default: "student" },
     codeHash: { type: String, required: true },
     expiresAt: { type: Date, required: true },
+    lastResendAt: { type: Date },
   },
   { timestamps: true }
 );

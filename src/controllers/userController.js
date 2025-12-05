@@ -240,9 +240,12 @@ export const resendDeleteAccountOtp = asyncHandler(async (req, res) => {
     pending.lastResendAt &&
     now - new Date(pending.lastResendAt).getTime() < 60 * 1000
   ) {
-    return res
-      .status(429)
-      .json({ message: "Please wait before requesting another code" });
+    const elapsed = now - new Date(pending.lastResendAt).getTime();
+    const remainingSeconds = Math.ceil((60 * 1000 - elapsed) / 1000);
+    return res.status(429).json({
+      message: "Please wait before requesting another code",
+      retryAfterSeconds: remainingSeconds,
+    });
   }
 
   const otp = generateOtp();
