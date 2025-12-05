@@ -478,6 +478,21 @@ export const listCourses = asyncHandler(async (req, res) => {
   const pdfBaseUrl = `${req.protocol}://${req.get(
     "host"
   )}/api/v1/uploads/pdfs/`;
+  // Prefetch enrolled students across all courses to avoid N+1 queries
+  const allEnrolledIds = Array.from(
+    new Set(
+      courses.flatMap((c) => (Array.isArray(c.lockedFor) ? c.lockedFor : []))
+    )
+  );
+  const studentsLookup = new Map();
+  if (allEnrolledIds.length > 0) {
+    const students = await User.find(
+      { _id: { $in: allEnrolledIds }, role: "student" },
+      "_id fullName email phone role cardImage"
+    ).lean();
+    students.forEach((s) => studentsLookup.set(String(s._id), s));
+  }
+
   const formattedCourses = courses.map((course) => ({
     _id: course._id,
     name: course.name,
@@ -490,6 +505,21 @@ export const listCourses = asyncHandler(async (req, res) => {
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
+    enrolledCount: Array.isArray(course.lockedFor)
+      ? course.lockedFor.length
+      : 0,
+    enrolledStudents: (Array.isArray(course.lockedFor) ? course.lockedFor : [])
+      .map((id) => studentsLookup.get(String(id)))
+      .filter(Boolean)
+      .map((s) => ({
+        _id: s._id,
+        fullName: s.fullName,
+        email: s.email,
+        phone: s.phone,
+        role: s.role,
+        cardImage: s.cardImage || null,
+        imageUrl: s.cardImage ? imageBaseUrl + s.cardImage : null,
+      })),
     notes: (course.notes || []).map((n) => ({
       _id: n._id,
       text: n.text,
