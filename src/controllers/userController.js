@@ -39,7 +39,7 @@ export const getStudentByQuery = asyncHandler(async (req, res) => {
     "-password -__v"
   );
 
-  if (!user) return res.status(404).json({ message: "Student not found" });
+  if (!user) return res.status(404).json({ message: "User not found" });
 
   const imageBaseUrl = `${req.protocol}://${req.get(
     "host"
