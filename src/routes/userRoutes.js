@@ -11,6 +11,7 @@ import {
   confirmDeleteAccount,
   getAllAdmins,
   resendDeleteAccountOtp,
+  getStudentByQuery,
 } from "../controllers/userController.js";
 
 const router = express.Router();
@@ -19,6 +20,7 @@ const router = express.Router();
 router.get("/search", isAuth, isAdmin, searchUser);
 router.delete("/delete", isAuth, isAdmin, deleteUser);
 router.get("/students", isAuth, isAdmin, getAllStudents);
+router.get("/student", isAuth, isAdmin, getStudentByQuery);
 // Superadmin Routes
 router.get("/admins", isAuth, isSuperadmin, getAllAdmins);
 
@@ -45,6 +47,33 @@ export default router;
  *         description: Profile retrieved successfully
  *       401:
  *         description: Unauthorized - Invalid token
+ */
+
+/**
+ * @swagger
+ * /api/v1/user/student:
+ *   get:
+ *     summary: Get single student by query (Admin/Superadmin)
+ *     description: Retrieve a single student using `emailOrPhone` query param. Inactive admins are blocked.
+ *     tags: [Users]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Student email
+ *         example: "student@example.com"
+ *     responses:
+ *       200:
+ *         description: Student retrieved successfully
+ *       400:
+ *         description: Missing query param
+ *       404:
+ *         description: Student not found
+ *       403:
+ *         description: Access denied - Requires admin or superadmin (or admin deactivated)
  */
 
 /**

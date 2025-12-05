@@ -29,6 +29,27 @@ export const searchUser = asyncHandler(async (req, res) => {
   res.status(200).json({ user: userObj });
 });
 
+// @desc Get single student by query param (email or phone) - Admin/Superadmin
+export const getStudentByQuery = asyncHandler(async (req, res) => {
+  const email = req.query.email;
+  if (!email)
+    return res.status(400).json({ message: "email query is required" });
+
+  const user = await User.findOne({ role: "student", email }).select(
+    "-password -__v"
+  );
+
+  if (!user) return res.status(404).json({ message: "Student not found" });
+
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const userObj = user.toObject();
+  if (userObj.cardImage) userObj.cardImage = imageBaseUrl + userObj.cardImage;
+
+  res.status(200).json({ student: userObj });
+});
+
 // @desc delete User by mail or phone
 export const deleteUser = asyncHandler(async (req, res) => {
   const { emailOrPhone } = req.body;
