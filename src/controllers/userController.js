@@ -47,7 +47,63 @@ export const getStudentByQuery = asyncHandler(async (req, res) => {
   const userObj = user.toObject();
   if (userObj.cardImage) userObj.cardImage = imageBaseUrl + userObj.cardImage;
 
-  res.status(200).json({ student: userObj });
+  // Fetch courses the student is enrolled in
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
+  const courses = await Course.find({ lockedFor: user._id }).lean();
+  const formattedCourses = courses.map((course) => ({
+    _id: course._id,
+    name: course.name,
+    teacher: course.teacher,
+    price: course.price,
+    whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
+    image: course.image,
+    imageUrl: course.image ? imageBaseUrl + course.image : null,
+    published: !!course.published,
+    createdAt: course.createdAt,
+    updatedAt: course.updatedAt,
+    sectionsCount: Array.isArray(course.sections) ? course.sections.length : 0,
+    sections: (course.sections || []).map((section) => ({
+      _id: section._id,
+      title: section.title,
+      isFree: !!section.isFree,
+      videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
+      pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
+      videos: (section.videos || []).map((video) => ({
+        _id: video._id,
+        label: video.label,
+        filename: video.filename,
+        url: videoBaseUrl + video.filename,
+      })),
+      pdfs: (() => {
+        const groups = {};
+        (section.pdfs || []).forEach((pdf) => {
+          const key = pdf.folder || "noFolder";
+          if (!groups[key]) groups[key] = [];
+          groups[key].push({
+            _id: pdf._id,
+            label: pdf.label,
+            filename: pdf.filename,
+            url: pdfBaseUrl + pdf.filename,
+            downloadable: pdf.downloadable || false,
+            folder: pdf.folder || null,
+          });
+        });
+        return Object.keys(groups).map((k) => ({ folder: k, files: groups[k] }));
+      })(),
+    })),
+  }));
+
+  res.status(200).json({
+    student: userObj,
+    coursesCount: formattedCourses.length,
+    courses: formattedCourses,
+  });
 });
 
 // @desc delete User by mail or phone
