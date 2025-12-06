@@ -583,6 +583,7 @@ export const listCoursesForStudent = asyncHandler(async (req, res) => {
     teacher: course.teacher,
     price: course.price,
     whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
     overview: course.overview || null,
     published: !!course.published,
     image: course.image,
@@ -751,6 +752,10 @@ export const getCourseAdmin = asyncHandler(async (req, res) => {
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     createdBy: course.createdBy,
     lockedFor: course.lockedFor,
+    enrolledCount: Array.isArray(course.lockedFor)
+      ? course.lockedFor.length
+      : 0,
+    enrolledStudents: [],
     comments: course.comments.map((comment) => ({
       _id: comment._id,
       message: comment.message,
@@ -797,6 +802,23 @@ export const getCourseAdmin = asyncHandler(async (req, res) => {
       })(),
     })),
   };
+  // Enrich enrolledStudents with user details
+  if (Array.isArray(course.lockedFor) && course.lockedFor.length > 0) {
+    const imageBase = imageBaseUrl;
+    const students = await User.find(
+      { _id: { $in: course.lockedFor }, role: "student" },
+      "_id fullName email phone role cardImage"
+    ).lean();
+    formattedCourse.enrolledStudents = students.map((s) => ({
+      _id: s._id,
+      fullName: s.fullName,
+      email: s.email,
+      phone: s.phone,
+      role: s.role,
+      cardImage: s.cardImage || null,
+      imageUrl: s.cardImage ? imageBase + s.cardImage : null,
+    }));
+  }
   res.status(200).json(formattedCourse);
 });
 
@@ -1030,6 +1052,7 @@ export const listUserCourses = asyncHandler(async (req, res) => {
     teacher: course.teacher,
     price: course.price,
     whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     notes: (course.notes || []).map((n) => ({
