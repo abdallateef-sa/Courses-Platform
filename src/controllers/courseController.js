@@ -499,6 +499,7 @@ export const listCourses = asyncHandler(async (req, res) => {
     teacher: course.teacher,
     price: course.price,
     whatsappNumber: course.whatsappNumber,
+    followGroup: course.followGroup,
     overview: course.overview || null,
     published: !!course.published,
     image: course.image,
