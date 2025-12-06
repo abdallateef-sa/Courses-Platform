@@ -1017,17 +1017,16 @@ export const removeStudentFromCourse = asyncHandler(async (req, res) => {
     return res.status(404).json({ message: "Student not found" });
   }
 
-  const before = course.lockedFor.length;
-  course.lockedFor = course.lockedFor.filter(
-    (uid) => uid.toString() !== user._id.toString()
+  // Use atomic pull to ensure DB update and avoid race conditions
+  const updateResult = await Course.updateOne(
+    { _id: course._id },
+    { $pull: { lockedFor: user._id } }
   );
-  const after = course.lockedFor.length;
 
-  if (before === after) {
+  // If nothing modified, student was not enrolled
+  if (!updateResult || updateResult.modifiedCount === 0) {
     return res.status(404).json({ message: "Student not enrolled in course" });
   }
-
-  await course.save();
 
   return res.status(200).json({ message: "Student removed from course" });
 });
