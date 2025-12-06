@@ -94,7 +94,10 @@ export const getStudentByQuery = asyncHandler(async (req, res) => {
             folder: pdf.folder || null,
           });
         });
-        return Object.keys(groups).map((k) => ({ folder: k, files: groups[k] }));
+        return Object.keys(groups).map((k) => ({
+          folder: k,
+          files: groups[k],
+        }));
       })(),
     })),
   }));

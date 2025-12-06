@@ -17,6 +17,9 @@ import {
   deleteSection,
   getStudentsInCourse,
   removeStudentFromCourse,
+  updateSection,
+  deleteVideoFromSection,
+  deletePdfFromSection,
 } from "../controllers/courseController.js";
 import { isAuth } from "../middlewares/authMiddleware.js";
 import { isAdmin } from "../middlewares/roleMiddleware.js";
@@ -62,6 +65,24 @@ router.post(
 router.delete("/delete", isAuth, isAdmin, deleteCourse);
 router.delete("/delete/section", isAuth, isAdmin, deleteSection);
 router.post("/students-in-course", isAuth, isAdmin, getStudentsInCourse);
+
+// Update a section's basic fields (title/isFree)
+router.put(
+  "/update/section",
+  isAuth,
+  isAdmin,
+  uploadVideosAndPdfs.fields([
+    { name: "videos", maxCount: 10 },
+    { name: "pdfs", maxCount: 10 },
+  ]),
+  updateSection
+);
+
+// Delete a specific video from a section
+router.delete("/delete/section/video", isAuth, isAdmin, deleteVideoFromSection);
+
+// Delete a specific PDF from a section
+router.delete("/delete/section/pdf", isAuth, isAdmin, deletePdfFromSection);
 
 // Student Routes
 router.get("/getAllCourses", listCoursesForStudent);

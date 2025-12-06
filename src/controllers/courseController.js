@@ -5,6 +5,12 @@ import Notification from "../models/notificationModel.js";
 import fs from "fs";
 import path from "path";
 import { fcm } from "../config/firebase.js";
+// Safe unlink wrapper to ensure files are removed without throwing
+const safeUnlink = (p) => {
+  try {
+    if (p && fs.existsSync(p)) fs.unlinkSync(p);
+  } catch (_) {}
+};
 
 // @desc Create new course (admin only)
 export const createCourse = asyncHandler(async (req, res) => {
@@ -142,7 +148,7 @@ export const updateCourse = asyncHandler(async (req, res) => {
   // Delete old image if new one is uploaded
   if (req.file && course.image) {
     const oldImagePath = path.join("src", "uploads", "images", course.image);
-    fs.unlink(oldImagePath, () => {});
+    safeUnlink(oldImagePath);
   }
 
   // Update course fields
@@ -1053,6 +1059,7 @@ export const listUserCourses = asyncHandler(async (req, res) => {
     price: course.price,
     whatsappNumber: course.whatsappNumber,
     followGroup: course.followGroup,
+    overview: course.overview || null,
     image: course.image,
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     notes: (course.notes || []).map((n) => ({
@@ -1114,7 +1121,7 @@ export const deleteCourse = asyncHandler(async (req, res) => {
   // Delete course image
   if (course.image) {
     const imagePath = path.join("src", "uploads", "images", course.image);
-    fs.unlink(imagePath, () => {});
+    safeUnlink(imagePath);
   }
 
   // Delete all files from all sections
@@ -1123,7 +1130,7 @@ export const deleteCourse = asyncHandler(async (req, res) => {
     section.videos.forEach((video) => {
       if (video.filename) {
         const videoPath = path.join("src", "uploads", "videos", video.filename);
-        fs.unlink(videoPath, () => {});
+        safeUnlink(videoPath);
       }
     });
 
@@ -1131,7 +1138,7 @@ export const deleteCourse = asyncHandler(async (req, res) => {
     section.pdfs.forEach((pdf) => {
       if (pdf.filename) {
         const pdfPath = path.join("src", "uploads", "pdfs", pdf.filename);
-        fs.unlink(pdfPath, () => {});
+        safeUnlink(pdfPath);
       }
     });
   });
@@ -1183,7 +1190,7 @@ export const deleteSection = asyncHandler(async (req, res) => {
   sectionToDelete.videos.forEach((video) => {
     if (video.filename) {
       const videoPath = path.join("src", "uploads", "videos", video.filename);
-      fs.unlink(videoPath, () => {});
+      safeUnlink(videoPath);
     }
   });
 
@@ -1191,7 +1198,7 @@ export const deleteSection = asyncHandler(async (req, res) => {
   sectionToDelete.pdfs.forEach((pdf) => {
     if (pdf.filename) {
       const pdfPath = path.join("src", "uploads", "pdfs", pdf.filename);
-      fs.unlink(pdfPath, () => {});
+      safeUnlink(pdfPath);
     }
   });
 
@@ -1203,6 +1210,172 @@ export const deleteSection = asyncHandler(async (req, res) => {
     message: "Section deleted successfully",
     course: course,
   });
+});
+
+// @desc Update a section (title/isFree) (admin only)
+export const updateSection = asyncHandler(async (req, res) => {
+  const { courseName, sectionId, title, isFree } = req.body;
+
+  if (!courseName || !sectionId) {
+    return res
+      .status(400)
+      .json({ message: "courseName and sectionId are required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
+  ) {
+    return res
+      .status(403)
+      .json({ message: "Not authorized to modify this course" });
+  }
+
+  const section = course.sections.id(sectionId);
+  if (!section) return res.status(404).json({ message: "Section not found" });
+
+  if (typeof title !== "undefined") section.title = String(title);
+  if (typeof isFree !== "undefined") {
+    if (typeof isFree === "string")
+      section.isFree = isFree.toLowerCase() === "true";
+    else section.isFree = !!isFree;
+  }
+
+  await course.save();
+
+  const imageBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/images/`;
+  const videoBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/videos/`;
+  const pdfBaseUrl = `${req.protocol}://${req.get(
+    "host"
+  )}/api/v1/uploads/pdfs/`;
+
+  return res.status(200).json({
+    message: "Section updated successfully",
+    course: {
+      ...course.toObject(),
+      imageUrl: course.image ? imageBaseUrl + course.image : null,
+      sections: course.sections.map((s) => ({
+        _id: s._id,
+        title: s.title,
+        isFree: !!s.isFree,
+        videoCount: Array.isArray(s.videos) ? s.videos.length : 0,
+        pdfCount: Array.isArray(s.pdfs) ? s.pdfs.length : 0,
+        videos: s.videos.map((v) => ({
+          _id: v._id,
+          label: v.label,
+          filename: v.filename,
+          url: videoBaseUrl + v.filename,
+        })),
+        pdfs: (() => {
+          const groups = {};
+          s.pdfs.forEach((pdf) => {
+            const key = pdf.folder || "noFolder";
+            if (!groups[key]) groups[key] = [];
+            groups[key].push({
+              _id: pdf._id,
+              label: pdf.label,
+              filename: pdf.filename,
+              url: pdfBaseUrl + pdf.filename,
+              downloadable: pdf.downloadable || false,
+              folder: pdf.folder || null,
+            });
+          });
+          return Object.keys(groups).map((k) => ({
+            folder: k,
+            files: groups[k],
+          }));
+        })(),
+      })),
+    },
+  });
+});
+
+// @desc Delete a video from a section (admin only)
+export const deleteVideoFromSection = asyncHandler(async (req, res) => {
+  const { courseName, sectionId, videoId } = req.body;
+
+  if (!courseName || !sectionId || !videoId) {
+    return res
+      .status(400)
+      .json({ message: "courseName, sectionId and videoId are required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
+  ) {
+    return res
+      .status(403)
+      .json({ message: "Not authorized to modify this course" });
+  }
+
+  const section = course.sections.id(sectionId);
+  if (!section) return res.status(404).json({ message: "Section not found" });
+
+  const video = section.videos.id(videoId);
+  if (!video) return res.status(404).json({ message: "Video not found" });
+
+  if (video.filename) {
+    const videoPath = path.join("src", "uploads", "videos", video.filename);
+    safeUnlink(videoPath);
+  }
+
+  video.deleteOne();
+  await course.save();
+
+  return res.status(200).json({ message: "Video deleted from section" });
+});
+
+// @desc Delete a PDF from a section (admin only)
+export const deletePdfFromSection = asyncHandler(async (req, res) => {
+  const { courseName, sectionId, pdfId } = req.body;
+
+  if (!courseName || !sectionId || !pdfId) {
+    return res
+      .status(400)
+      .json({ message: "courseName, sectionId and pdfId are required" });
+  }
+
+  const course = await Course.findOne({ name: courseName });
+  if (!course) return res.status(404).json({ message: "Course not found" });
+
+  if (
+    course.createdBy.toString() !== req.user._id.toString() &&
+    req.user.role !== "admin" &&
+    req.user.role !== "superadmin"
+  ) {
+    return res
+      .status(403)
+      .json({ message: "Not authorized to modify this course" });
+  }
+
+  const section = course.sections.id(sectionId);
+  if (!section) return res.status(404).json({ message: "Section not found" });
+
+  const pdf = section.pdfs.id(pdfId);
+  if (!pdf) return res.status(404).json({ message: "File not found" });
+
+  if (pdf.filename) {
+    const pdfPath = path.join("src", "uploads", "pdfs", pdf.filename);
+    safeUnlink(pdfPath);
+  }
+
+  pdf.deleteOne();
+  await course.save();
+
+  return res.status(200).json({ message: "File deleted from section" });
 });
 
 // @desc Get my notifications
