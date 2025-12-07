@@ -1278,6 +1278,31 @@ export const updateSection = asyncHandler(async (req, res) => {
     else section.isFree = !!isFree;
   }
 
+  // Append any newly uploaded videos to existing ones without overwriting
+  try {
+    const videoLabelList = req.body.videoLabels
+      ? JSON.parse(req.body.videoLabels)
+      : [];
+    if (req.files && Array.isArray(req.files.videos)) {
+      req.files.videos.forEach((file, index) => {
+        section.videos.push({
+          label: videoLabelList[index] || file.originalname,
+          filename: file.filename,
+        });
+      });
+    }
+  } catch (_) {
+    // If labels JSON is invalid, ignore and use original filenames
+    if (req.files && Array.isArray(req.files.videos)) {
+      req.files.videos.forEach((file) => {
+        section.videos.push({
+          label: file.originalname,
+          filename: file.filename,
+        });
+      });
+    }
+  }
+
   await course.save();
 
   const imageBaseUrl = `${req.protocol}://${req.get(
