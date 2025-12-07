@@ -584,6 +584,20 @@ export const listCoursesForStudent = asyncHandler(async (req, res) => {
   const pdfBaseUrl = `${req.protocol}://${req.get(
     "host"
   )}/api/v1/uploads/pdfs/`;
+  // Prefetch enrolled students (id & email) to avoid N+1 queries
+  const allEnrolledIds = Array.from(
+    new Set(
+      courses.flatMap((c) => (Array.isArray(c.lockedFor) ? c.lockedFor : []))
+    )
+  );
+  const studentsLookup = new Map();
+  if (allEnrolledIds.length > 0) {
+    const students = await User.find(
+      { _id: { $in: allEnrolledIds }, role: "student" },
+      "_id email"
+    ).lean();
+    students.forEach((s) => studentsLookup.set(String(s._id), s));
+  }
   const formattedCourses = courses.map((course) => ({
     _id: course._id,
     name: course.name,
@@ -597,6 +611,13 @@ export const listCoursesForStudent = asyncHandler(async (req, res) => {
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     createdAt: course.createdAt,
     updatedAt: course.updatedAt,
+    enrolledCount: Array.isArray(course.lockedFor)
+      ? course.lockedFor.length
+      : 0,
+    enrolledStudents: (Array.isArray(course.lockedFor) ? course.lockedFor : [])
+      .map((id) => studentsLookup.get(String(id)))
+      .filter(Boolean)
+      .map((s) => ({ _id: s._id, email: s.email })),
     notes: (course.notes || []).map((n) => ({
       _id: n._id,
       text: n.text,
@@ -665,6 +686,15 @@ export const getCourse = asyncHandler(async (req, res) => {
   const pdfBaseUrl = `${req.protocol}://${req.get(
     "host"
   )}/api/v1/uploads/pdfs/`;
+  // Prefetch enrolled students (id & email) for this course
+  let enrolledStudents = [];
+  if (Array.isArray(course.lockedFor) && course.lockedFor.length > 0) {
+    const students = await User.find(
+      { _id: { $in: course.lockedFor }, role: "student" },
+      "_id email"
+    ).lean();
+    enrolledStudents = students.map((s) => ({ _id: s._id, email: s.email }));
+  }
   const formattedCourse = {
     _id: course._id,
     name: course.name,
@@ -678,6 +708,10 @@ export const getCourse = asyncHandler(async (req, res) => {
     imageUrl: course.image ? imageBaseUrl + course.image : null,
     createdBy: course.createdBy,
     lockedFor: course.lockedFor,
+    enrolledCount: Array.isArray(course.lockedFor)
+      ? course.lockedFor.length
+      : 0,
+    enrolledStudents,
     comments: course.comments.map((comment) => ({
       _id: comment._id,
       message: comment.message,
@@ -1445,4 +1479,131 @@ export const getStudentsInCourse = asyncHandler(async (req, res) => {
   res
     .status(200)
     .json({ count: formattedStudents.length, students: formattedStudents });
+});
+
+// @desc Stream video file with HTTP Range (Partial Content 206)
+export const streamVideo = asyncHandler(async (req, res) => {
+  const { filename } = req.params;
+  if (!filename) return res.status(400).send("Filename is required");
+
+  const videoPath = path.join("src", "uploads", "videos", filename);
+  if (!fs.existsSync(videoPath)) return res.status(404).send("File not found");
+
+  // Authorization: ensure the requested video belongs to a course the user is enrolled in
+  // Find any course that contains this video filename in any section
+  const owningCourse = await Course.findOne({
+    sections: { $elemMatch: { videos: { $elemMatch: { filename } } } },
+    published: true,
+  }).lean();
+
+  if (!owningCourse) {
+    return res.status(404).send("Video not associated with any course");
+  }
+
+  const userId = req.user?._id;
+  if (!userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const isEnrolled = Array.isArray(owningCourse.lockedFor)
+    ? owningCourse.lockedFor.some((id) => String(id) === String(userId))
+    : false;
+  // Allow if section marked free as well (any section that has this video and isFree=true)
+  const sectionWithVideo = owningCourse.sections.find(
+    (s) =>
+      Array.isArray(s.videos) && s.videos.some((v) => v.filename === filename)
+  );
+  const isFreeSection = sectionWithVideo ? !!sectionWithVideo.isFree : false;
+
+  if (!isEnrolled && !isFreeSection) {
+    return res.status(403).send("Not authorized to access this video");
+  }
+
+  const stat = fs.statSync(videoPath);
+  const fileSize = stat.size;
+
+  // Detect content type from extension
+  const ext = path.extname(filename).toLowerCase();
+  const mimeMap = {
+    ".mp4": "video/mp4",
+    ".webm": "video/webm",
+    ".mov": "video/quicktime",
+    ".mkv": "video/x-matroska",
+    ".avi": "video/x-msvideo",
+  };
+  const contentType = mimeMap[ext] || "application/octet-stream";
+
+  const range = req.headers.range;
+  if (!range) {
+    // Fallback: serve the whole file
+    res.writeHead(200, {
+      "Content-Length": fileSize,
+      "Content-Type": contentType,
+    });
+    const fullStream = fs.createReadStream(videoPath);
+    // Cleanup on client disconnect
+    const cleanup = () => {
+      try {
+        fullStream.destroy();
+      } catch (_) {}
+    };
+    res.on("close", cleanup);
+    res.on("finish", cleanup);
+    res.on("error", cleanup);
+    fullStream.on("error", (err) => {
+      console.error("Stream error:", err);
+      if (!res.headersSent) res.status(500).end("Stream error");
+      cleanup();
+    });
+    return fullStream.pipe(res);
+  }
+
+  // Proper Range parsing: bytes=start-end
+  const matches = range.match(/bytes=(\d+)-(\d+)?/);
+  if (!matches) {
+    return res.status(400).send("Invalid Range header");
+  }
+  let start = parseInt(matches[1], 10);
+  let end = matches[2] ? parseInt(matches[2], 10) : undefined;
+
+  if (isNaN(start) || start < 0 || start >= fileSize) {
+    // 416 Range Not Satisfiable
+    res.setHeader("Content-Range", `bytes */${fileSize}`);
+    return res.status(416).end();
+  }
+
+  const defaultChunk = parseInt(process.env.CHUNK_SIZE_BYTES || "1048576", 10); // default 1MB
+  if (end === undefined) {
+    end = Math.min(start + defaultChunk - 1, fileSize - 1);
+  } else {
+    end = Math.min(end, fileSize - 1);
+  }
+
+  if (end < start) {
+    res.setHeader("Content-Range", `bytes */${fileSize}`);
+    return res.status(416).end();
+  }
+
+  const contentLength = end - start + 1;
+  res.writeHead(206, {
+    "Content-Range": `bytes ${start}-${end}/${fileSize}`,
+    "Accept-Ranges": "bytes",
+    "Content-Length": contentLength,
+    "Content-Type": contentType,
+  });
+
+  const videoStream = fs.createReadStream(videoPath, { start, end });
+  const cleanup = () => {
+    try {
+      videoStream.destroy();
+    } catch (_) {}
+  };
+  res.on("close", cleanup);
+  res.on("finish", cleanup);
+  res.on("error", cleanup);
+  videoStream.on("error", (err) => {
+    console.error("Stream error:", err);
+    if (!res.headersSent) res.status(500).end("Stream error");
+    cleanup();
+  });
+  videoStream.pipe(res);
 });

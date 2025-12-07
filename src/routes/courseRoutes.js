@@ -17,6 +17,7 @@ import {
   deleteSection,
   getStudentsInCourse,
   removeStudentFromCourse,
+  streamVideo,
   updateSection,
   deleteVideoFromSection,
   deletePdfFromSection,
@@ -88,6 +89,9 @@ router.delete("/delete/section/pdf", isAuth, isAdmin, deletePdfFromSection);
 router.get("/getAllCourses", listCoursesForStudent);
 router.get("/me", isAuth, listUserCourses);
 router.get("/Course", getCourse);
+
+// Video streaming with HTTP Range (Partial Content 206)
+router.get("/uploads/videos/:filename", isAuth, streamVideo);
 
 export default router;
 

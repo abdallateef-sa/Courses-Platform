@@ -9,6 +9,8 @@ import indexRoute from "./routes/indexRoute.js";
 import { specs, swaggerUi } from "./config/swagger.js";
 import fs from "fs";
 import path from "path";
+import { streamVideo } from "./controllers/courseController.js";
+import { isAuth } from "./middlewares/authMiddleware.js";
 
 // Create folders if not exist
 const imagePath = path.join("src", "uploads", "images");
@@ -38,7 +40,10 @@ app.use(
 // CORS configuration
 app.use(cors());
 
-// Serve images, pdfs, and videos statically
+// Video streaming with HTTP Range (Partial Content 206) overrides static
+app.get("/api/v1/uploads/videos/:filename", isAuth, streamVideo);
+
+// Serve images, pdfs, and videos statically (fallback)
 app.use(
   "/api/v1/uploads/images",
   express.static(path.join(process.cwd(), "src/uploads/images"))
@@ -47,10 +52,7 @@ app.use(
   "/api/v1/uploads/pdfs",
   express.static(path.join(process.cwd(), "src/uploads/pdfs"))
 );
-app.use(
-  "/api/v1/uploads/videos",
-  express.static(path.join(process.cwd(), "src/uploads/videos"))
-);
+// Note: videos path handled by stream route above
 
 if (process.env.NODE_ENV === "development") {
   app.use(morgan("dev"));
