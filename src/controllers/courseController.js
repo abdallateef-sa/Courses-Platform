@@ -1488,34 +1488,7 @@ export const streamVideo = asyncHandler(async (req, res) => {
   const videoPath = path.join("src", "uploads", "videos", filename);
   if (!fs.existsSync(videoPath)) return res.status(404).send("File not found");
 
-  // Authorization: ensure the requested video belongs to a course the user is enrolled in
-  // Find any course that contains this video filename in any section
-  const owningCourse = await Course.findOne({
-    sections: { $elemMatch: { videos: { $elemMatch: { filename } } } },
-    published: true,
-  }).lean();
-
-  if (!owningCourse) {
-    return res.status(404).send("Video not associated with any course");
-  }
-
-  const userId = req.user?._id;
-  if (!userId) {
-    return res.status(401).send("Unauthorized");
-  }
-  const isEnrolled = Array.isArray(owningCourse.lockedFor)
-    ? owningCourse.lockedFor.some((id) => String(id) === String(userId))
-    : false;
-  // Allow if section marked free as well (any section that has this video and isFree=true)
-  const sectionWithVideo = owningCourse.sections.find(
-    (s) =>
-      Array.isArray(s.videos) && s.videos.some((v) => v.filename === filename)
-  );
-  const isFreeSection = sectionWithVideo ? !!sectionWithVideo.isFree : false;
-
-  if (!isEnrolled && !isFreeSection) {
-    return res.status(403).send("Not authorized to access this video");
-  }
+  // Public streaming: no auth or enrollment required
 
   const stat = fs.statSync(videoPath);
   const fileSize = stat.size;
@@ -1528,6 +1501,10 @@ export const streamVideo = asyncHandler(async (req, res) => {
     ".mov": "video/quicktime",
     ".mkv": "video/x-matroska",
     ".avi": "video/x-msvideo",
+    ".m4v": "video/x-m4v",
+    ".3gp": "video/3gpp",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
   };
   const contentType = mimeMap[ext] || "application/octet-stream";
 
@@ -1537,6 +1514,7 @@ export const streamVideo = asyncHandler(async (req, res) => {
     res.writeHead(200, {
       "Content-Length": fileSize,
       "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
     });
     const fullStream = fs.createReadStream(videoPath);
     // Cleanup on client disconnect
@@ -1570,9 +1548,9 @@ export const streamVideo = asyncHandler(async (req, res) => {
     return res.status(416).end();
   }
 
-  const defaultChunk = parseInt(process.env.CHUNK_SIZE_BYTES || "1048576", 10); // default 1MB
+  // If end is undefined (e.g., bytes=0-), stream until EOF
   if (end === undefined) {
-    end = Math.min(start + defaultChunk - 1, fileSize - 1);
+    end = fileSize - 1;
   } else {
     end = Math.min(end, fileSize - 1);
   }

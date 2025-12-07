@@ -41,7 +41,8 @@ app.use(
 app.use(cors());
 
 // Video streaming with HTTP Range (Partial Content 206) overrides static
-app.get("/api/v1/uploads/videos/:filename", isAuth, streamVideo);
+// Public access: no auth required
+app.get("/api/v1/uploads/videos/:filename", streamVideo);
 
 // Serve images, pdfs, and videos statically (fallback)
 app.use(
