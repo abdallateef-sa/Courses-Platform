@@ -1107,7 +1107,6 @@ export const listUserCourses = asyncHandler(async (req, res) => {
     sections: course.sections.map((section) => ({
       _id: section._id,
       title: section.title,
-      isFree: !!section.isFree,
       videoCount: Array.isArray(section.videos) ? section.videos.length : 0,
       pdfCount: Array.isArray(section.pdfs) ? section.pdfs.length : 0,
       videos: section.videos.map((video) => ({
