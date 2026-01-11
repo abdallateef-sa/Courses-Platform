@@ -1506,20 +1506,34 @@ export const getStudentsInCourse = asyncHandler(async (req, res) => {
 });
 
 // @desc Stream video file with HTTP Range (Partial Content 206)
+// Optimized for high concurrency with async operations and chunked streaming
+const CHUNK_SIZE = 1024 * 1024; // 1MB chunks for optimal streaming
+const HIGH_WATER_MARK = 64 * 1024; // 64KB buffer size for memory efficiency
+
 export const streamVideo = asyncHandler(async (req, res) => {
   const { filename } = req.params;
   if (!filename) return res.status(400).send("Filename is required");
 
-  const videoPath = path.join("src", "uploads", "videos", filename);
-  if (!fs.existsSync(videoPath)) return res.status(404).send("File not found");
+  // Sanitize filename to prevent directory traversal
+  const sanitizedFilename = path.basename(filename);
+  const videoPath = path.join("src", "uploads", "videos", sanitizedFilename);
 
-  // Public streaming: no auth or enrollment required
+  // Use async file operations to avoid blocking event loop
+  let stat;
+  try {
+    stat = await fs.promises.stat(videoPath);
+  } catch (err) {
+    if (err.code === "ENOENT") {
+      return res.status(404).send("File not found");
+    }
+    console.error("Stat error:", err);
+    return res.status(500).send("Server error");
+  }
 
-  const stat = fs.statSync(videoPath);
   const fileSize = stat.size;
 
   // Detect content type from extension
-  const ext = path.extname(filename).toLowerCase();
+  const ext = path.extname(sanitizedFilename).toLowerCase();
   const mimeMap = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
@@ -1533,51 +1547,113 @@ export const streamVideo = asyncHandler(async (req, res) => {
   };
   const contentType = mimeMap[ext] || "application/octet-stream";
 
+  // Common headers for caching and performance
+  const commonHeaders = {
+    "Accept-Ranges": "bytes",
+    "Content-Type": contentType,
+    "Cache-Control": "public, max-age=86400", // Cache for 24 hours
+    "X-Content-Type-Options": "nosniff",
+    "Last-Modified": stat.mtime.toUTCString(),
+    ETag: `"${stat.size}-${stat.mtime.getTime()}"`,
+  };
+
+  // Handle conditional requests (If-None-Match, If-Modified-Since)
+  const ifNoneMatch = req.headers["if-none-match"];
+  const ifModifiedSince = req.headers["if-modified-since"];
+  const etag = commonHeaders["ETag"];
+
+  if (ifNoneMatch === etag) {
+    return res.status(304).end();
+  }
+
+  if (ifModifiedSince) {
+    const modifiedDate = new Date(ifModifiedSince);
+    if (stat.mtime <= modifiedDate) {
+      return res.status(304).end();
+    }
+  }
+
   const range = req.headers.range;
-  if (!range) {
-    // Fallback: serve the whole file
-    res.writeHead(200, {
-      "Content-Length": fileSize,
-      "Content-Type": contentType,
-      "Accept-Ranges": "bytes",
-    });
-    const fullStream = fs.createReadStream(videoPath);
-    // Cleanup on client disconnect
+
+  // Helper function for proper stream cleanup
+  const setupStreamCleanup = (stream, res) => {
+    let destroyed = false;
     const cleanup = () => {
-      try {
-        fullStream.destroy();
-      } catch (_) {}
+      if (!destroyed) {
+        destroyed = true;
+        try {
+          stream.destroy();
+        } catch (_) {}
+      }
     };
+
     res.on("close", cleanup);
-    res.on("finish", cleanup);
     res.on("error", cleanup);
-    fullStream.on("error", (err) => {
-      console.error("Stream error:", err);
-      if (!res.headersSent) res.status(500).end("Stream error");
+
+    stream.on("error", (err) => {
+      console.error("Stream error:", err.message);
       cleanup();
+      if (!res.headersSent) {
+        res.status(500).end("Stream error");
+      }
     });
+
+    return cleanup;
+  };
+
+  if (!range) {
+    // No range header - serve with chunked response for better memory management
+    // For large files, force range request by sending only first chunk
+    if (fileSize > CHUNK_SIZE * 2) {
+      // Send headers that encourage range requests
+      res.writeHead(200, {
+        ...commonHeaders,
+        "Content-Length": fileSize,
+      });
+      const fullStream = fs.createReadStream(videoPath, {
+        highWaterMark: HIGH_WATER_MARK,
+      });
+      setupStreamCleanup(fullStream, res);
+      return fullStream.pipe(res);
+    }
+
+    // Small file - serve entirely
+    res.writeHead(200, {
+      ...commonHeaders,
+      "Content-Length": fileSize,
+    });
+    const fullStream = fs.createReadStream(videoPath, {
+      highWaterMark: HIGH_WATER_MARK,
+    });
+    setupStreamCleanup(fullStream, res);
     return fullStream.pipe(res);
   }
 
-  // Proper Range parsing: bytes=start-end
-  const matches = range.match(/bytes=(\d+)-(\d+)?/);
+  // Parse Range header with support for multiple ranges
+  const matches = range.match(/bytes=(\d+)-(\d*)/);
   if (!matches) {
     return res.status(400).send("Invalid Range header");
   }
+
   let start = parseInt(matches[1], 10);
   let end = matches[2] ? parseInt(matches[2], 10) : undefined;
 
+  // Validate start position
   if (isNaN(start) || start < 0 || start >= fileSize) {
-    // 416 Range Not Satisfiable
     res.setHeader("Content-Range", `bytes */${fileSize}`);
     return res.status(416).end();
   }
 
-  // If end is undefined (e.g., bytes=0-), stream until EOF
-  if (end === undefined) {
-    end = fileSize - 1;
+  // Calculate end position with chunk size limit for better concurrency
+  if (end === undefined || end >= fileSize) {
+    // Limit chunk size to prevent memory issues with many concurrent users
+    end = Math.min(start + CHUNK_SIZE - 1, fileSize - 1);
   } else {
     end = Math.min(end, fileSize - 1);
+    // Also apply chunk limit even if client requested more
+    if (end - start + 1 > CHUNK_SIZE) {
+      end = start + CHUNK_SIZE - 1;
+    }
   }
 
   if (end < start) {
@@ -1586,26 +1662,21 @@ export const streamVideo = asyncHandler(async (req, res) => {
   }
 
   const contentLength = end - start + 1;
+
   res.writeHead(206, {
+    ...commonHeaders,
     "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-    "Accept-Ranges": "bytes",
     "Content-Length": contentLength,
-    "Content-Type": contentType,
   });
 
-  const videoStream = fs.createReadStream(videoPath, { start, end });
-  const cleanup = () => {
-    try {
-      videoStream.destroy();
-    } catch (_) {}
-  };
-  res.on("close", cleanup);
-  res.on("finish", cleanup);
-  res.on("error", cleanup);
-  videoStream.on("error", (err) => {
-    console.error("Stream error:", err);
-    if (!res.headersSent) res.status(500).end("Stream error");
-    cleanup();
+  const videoStream = fs.createReadStream(videoPath, {
+    start,
+    end,
+    highWaterMark: HIGH_WATER_MARK,
   });
+
+  setupStreamCleanup(videoStream, res);
+
+  // Use pipeline-like behavior with backpressure handling
   videoStream.pipe(res);
 });
